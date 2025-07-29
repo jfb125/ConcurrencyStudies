@@ -22,6 +22,7 @@
 
 void sumUsingFunction(uint64_t number_of_elements);
 void sumUsingFunctor (uint64_t number_of_elements);
+void sumUsingLambdas (uint64_t number_of_elements);
 
 template <typename T>
 std::string partialSumstoString(std::vector<T> &partial_sums) {
