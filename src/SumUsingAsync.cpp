@@ -1,56 +1,56 @@
+/*
+ * sumUsingAsync.cpp
+ *
+ *  Created on: Jul 31, 2025
+ *      Author: joe
+ */
 #include "ConcurrencyStudies.h"
 
-
-void accumulateRange(uint64_t &result, uint64_t start, uint64_t end) {
-
-	result = 0;
-	for (uint64_t i = start; i != end; i++) {
+uint64_t asyncAccumulateFunction(uint64_t start, uint64_t end) {
+	uint64_t result = 0;
+	for (uint64_t i = start; i < end; i++) {
 		result += i;
 	}
-	if (false) {
-		std::cout << "Thread " << std::this_thread::get_id()
-				  << " over [" << std::setw(12) << start << ","
-				  << std::setw(12) << end << ") stored "
-				  << std::setw(24) << result << " to &result" << std::endl;
-	}
+//	std::cout << "thread " << std::this_thread::get_id() << ": " << std::setw(20) << start << " to " << std::setw(20) << end << " sums to " << std::setw(24) << result << std::endl;
+	return result;
 }
 
-void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases) {
+void sumUsingAsyncFunction (uint64_t number_of_elements, TestRange &test_cases) {
 
 	std::cout 	<< std::endl
-				<< "void sumUsingFunction()"
+				<< "void sumUsingAsyncFunction()"
 				<< std::endl;
 
 	test_cases.reset();
 	while (!test_cases.done()) {
 		int number_of_threads = test_cases.next();
+		uint64_t step_size = number_of_elements / number_of_threads;
 		std::cout << "* ***********************************	*" << std::endl;
 		std::cout << "       number of threads: " << number_of_threads << std::endl;
 
-		uint64_t step = number_of_elements / number_of_threads;
 		uint64_t step_remainder = number_of_elements % number_of_threads;
-
-		uint64_t partial_sums[number_of_threads];
-		std::vector<std::thread> threads(number_of_threads);
+		std::vector<std::future<uint64_t>> tasks;
 
 		auto start_time = std::chrono::high_resolution_clock::now();
+
+		uint64_t start = 0;
+		uint64_t end = start+step_size;
+
 		for (int i = 0; i != number_of_threads; i++) {
-			uint64_t start = i * step;
-			uint64_t end = (i+1) * step;
 			if (i == number_of_threads-1) {
 				end += step_remainder;
 			}
-			threads[i] = std::thread(accumulateRange, std::ref(partial_sums[i]), start, end);
-		}
-
-		for (std::thread &t : threads) {
-			if (t.joinable()) {
-				t.join();
-			}
+//			std::cout << " creating async(asyncAccumulateFunction(" << std::setw(20) << start << "," << std::setw(20) << end << ");" << std::endl;
+			tasks.push_back(std::async(asyncAccumulateFunction, start, end));
+			start = end;
+			end += step_size;
 		}
 
 		uint64_t sum = 0;
-		for (int i = 0; i != number_of_threads; i++) {
+		uint64_t partial_sums[number_of_threads];
+		int i = 0;
+		for (auto &t : tasks) {
+			partial_sums[i] = t.get();
 			sum += partial_sums[i];
 		}
 
@@ -64,5 +64,7 @@ void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases) {
 
 		std::cout << "\tExecution time was: " << duration.count() << "ms" << std::endl;
 	}
+
 }
+
 
