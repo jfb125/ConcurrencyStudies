@@ -16,10 +16,10 @@
 #include <numeric>
 #include <chrono>
 
-#define MAJOR_REVISION 1
+#define MAJOR_REVISION 2
 #define MINOR_REVISION 0
 #define BUILD_NUMBER 1
-#define REVISION_STRING "1.00"
+#define REVISION_STRING "2.00"
 
 //#define PRINT_PARTIAL_SUMS
 
