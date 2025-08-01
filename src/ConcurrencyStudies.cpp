@@ -20,7 +20,7 @@ int main (int argc, char *argv[]) {
 			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
 
 	constexpr uint64_t number_of_elements = 1000 * 1000 * 1000;
-	int _num_threads[] = { 7, 19, 211 };
+	int _num_threads[] = { 23, 211, 256 };
 	int _num_num_threads = sizeof(_num_threads) / sizeof(int);
 	TestRange number_of_threads(_num_threads, _num_num_threads);
 	sumUsingFunction(number_of_elements, number_of_threads);
