@@ -66,12 +66,12 @@ public:
 	std::string *exit_msg;
 	int thread_number;
 	int repeat_count;
-	Bark **produced_queue;
+	std::shared_ptr<Bark*> *produced_queue;
 	ProducerThreadArgs(std::string *_id_msg,
 					   std::string *_exit_msg,
 					   int _thread_number,
 					   int _repeat_count,
-					   Bark** _produced_queue) :
+					   std::shared_ptr<Bark*> * _produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   thread_number(_thread_number),
@@ -80,17 +80,17 @@ public:
 };
 
 void produceBark(ProducerThreadArgs *args, int &enqueue, int &active_thread_count, std::mutex &lock) {
-	Bark *tmp;
+	Bark* tmp;
 	for (int i = 0; i != args->repeat_count; i++) {
 		tmp = new Bark(args->thread_number, i, args->id_msg);
 		lock.lock();
-		args->produced_queue[enqueue] = tmp;
+		args->produced_queue[enqueue] = std::make_shared<Bark*>(tmp);
 		enqueue++;
 		lock.unlock();
 	}
-	tmp = new Bark(args->thread_number, args->repeat_count, args->exit_msg);;
+	tmp = new Bark(args->thread_number, args->repeat_count, args->exit_msg);
 	lock.lock();
-	args->produced_queue[enqueue] = tmp;
+	args->produced_queue[enqueue] = std::make_shared<Bark*>(tmp);
 	enqueue++;
 	active_thread_count--;
 	lock.unlock();
@@ -102,18 +102,18 @@ void produceBark(ProducerThreadArgs *args, int &enqueue, int &active_thread_coun
 /* **************************************************************************** */
 /* **************************************************************************** */
 
-void consumeBark(int &consumed_bark_count, Bark**produced_q, Bark**retired_q, int &nq, int &tcnt) {
+void consumeBark(int &consumed_bark_count, std::shared_ptr<Bark*> *produced_q, std::shared_ptr<Bark*> *retired_q, int &nq, int &tcnt) {
 	int dq = 0;
 	while (tcnt != 0) {
 		if (dq != nq) {
 			consumed_bark_count++;
-			retired_q[dq] = produced_q[dq];
+			*retired_q[dq] = *produced_q[dq];
 			dq++;
 		}
 	}
 	while (dq != nq) {
 		consumed_bark_count++;
-		retired_q[dq] = produced_q[dq];
+		*retired_q[dq] = *produced_q[dq];
 		dq++;
 	}
 }
@@ -135,8 +135,6 @@ int main (int argc, char *argv[]) {
 	int		active_thread_count;
 	int 	enqueue;
 	int 	dequeue;
-	Bark 	**produced_queue;
-	Bark 	**retired_queue;
 
 	int number_of_threads = 8;
 	int number_of_tests = 1;
@@ -148,8 +146,10 @@ int main (int argc, char *argv[]) {
 		// number of times a string will be enqueued / thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
 		int queue_size = repeat_per_thread * number_of_threads + number_of_threads;
-		produced_queue = new Bark*[queue_size];
-		retired_queue = new Bark*[queue_size];
+		std::shared_ptr<Bark*> 	produced_queue[queue_size];
+		std::shared_ptr<Bark*> 	retired_queue[queue_size];
+//		produced_queue = new Bark*[queue_size];
+//		retired_queue = new Bark*[queue_size];
 		enqueue = 0;
 		dequeue = 0;
 		active_thread_count = number_of_threads;
