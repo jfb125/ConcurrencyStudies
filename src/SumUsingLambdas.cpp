@@ -7,7 +7,7 @@
 
 #include "ConcurrencyStudies.h"
 
-void sumUsingLambdas(uint64_t number_of_elements, TestRange &test_cases) {
+void sumUsingLambda(uint64_t number_of_elements, TestRange &test_cases) {
 
 	std::cout 	<< std::endl
 				<< "void sumUsingLambdas()"
@@ -16,9 +16,6 @@ void sumUsingLambdas(uint64_t number_of_elements, TestRange &test_cases) {
 	test_cases.reset();
 	while (!test_cases.done()) {
 		int number_of_threads = test_cases.next();
-		std::cout << "* *********************************************** *" << std::endl;
-		std::cout << "            Number of threads: " << number_of_threads << std::endl;
-
 		uint64_t step_size = number_of_elements / number_of_threads;
 		uint64_t step_remainder = number_of_elements % number_of_threads;
 		uint64_t start = 0;
@@ -32,7 +29,7 @@ void sumUsingLambdas(uint64_t number_of_elements, TestRange &test_cases) {
 			if (i == number_of_threads - 1) {
 				end = end+step_remainder;
 			}
-			threads.push_back(std::thread([i, &partial_sums, start, end] {
+			threads.push_back(std::thread([i, &partial_sums, start, end] () {
 				partial_sums[i] = 0;
 				for (uint64_t x = start; x < end; x++) {
 					partial_sums[i] += x;
@@ -60,8 +57,6 @@ void sumUsingLambdas(uint64_t number_of_elements, TestRange &test_cases) {
 #ifdef PRINT_PARTIAL_SUMS
 		std::cout << "Partial sums are " << partialSumsToString<uint64_t>(partial_sums, number_of_threads) << std::endl;
 #endif
-		std::cout << "\tSum = " << sum << std::endl;
-
-		std::cout << "\tExecution time was: " << duration.count() << "ms" << std::endl;
+		announceResult(number_of_threads, sum, duration);
 	}
 }

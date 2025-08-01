@@ -32,9 +32,6 @@ void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
 	test_cases.reset();
 	while (!test_cases.done()) {
 		int number_of_threads = test_cases.next();
-		std::cout << "* ***********************************	*" << std::endl;
-		std::cout << "       number of threads: " << number_of_threads << std::endl;
-
 		int step_size 		= number_of_elements / number_of_threads;
 		int step_remainder	= number_of_elements % number_of_threads;
 		std::vector<std::thread> threads;
@@ -58,23 +55,21 @@ void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
 			}
 		}
 
-		uint64_t partial_sums[number_of_threads];
-		int i = 0;
 		uint64_t sum = 0;
-
 		for (auto &f : functors) {
 			sum += f->m_sum;
-			partial_sums[i++] = f->m_sum;
 		}
 
 		auto end_time = std::chrono::high_resolution_clock::now();
 		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
 #ifdef PRINT_PARTIAL_SUMS
+		uint64_t partial_sums[number_of_threads];
+		for (int i = 0; i != number_of_threads; i++) {
+			partial_sums[i] = functors[i]->m_sum;
+		}
 		std::cout << "Partial sums are: " << partialSumsToString<uint64_t>(partial_sums, number_of_threads) << std::endl;
 #endif
-		std::cout << "\tSum is " << sum << std::endl;
-
-		std::cout << "\tExecution time was: " << duration.count() << "ms" << std::endl;
+		announceResult(number_of_threads, sum, duration);
 	}
 }

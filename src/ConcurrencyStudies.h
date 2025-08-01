@@ -6,6 +6,7 @@
  */
 #ifndef CONCURRENCYSTUDIES_H
 #define CONCURRENCYSTUDIES_H
+
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -14,8 +15,6 @@
 #include <vector>
 #include <numeric>
 #include <chrono>
-
-#include "ConcurrencyStudies.h"
 
 #define MAJOR_REVISION 1
 #define MINOR_REVISION 0
@@ -44,8 +43,12 @@ public:
 
 void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases);
-void sumUsingLambdas (uint64_t number_of_elements, TestRange &test_cases);
+void sumUsingLambda  (uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingAsyncFunction	 (uint64_t number_of_elements, TestRange &test_cases);
+void sumUsingAsyncFunctor	 (uint64_t number_of_elements, TestRange &test_cases);
+void sumUsingAsyncLambda	 (uint64_t number_of_elements, TestRange &test_cases);
+
+void announceResult(int number_of_threads, uint64_t sum, std::chrono::milliseconds duration);
 
 template <typename T>
 std::string partialSumsToString(uint64_t *partial_sums, int num_sums) {

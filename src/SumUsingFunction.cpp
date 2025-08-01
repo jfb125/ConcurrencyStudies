@@ -24,8 +24,6 @@ void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases) {
 	test_cases.reset();
 	while (!test_cases.done()) {
 		int number_of_threads = test_cases.next();
-		std::cout << "* ***********************************	*" << std::endl;
-		std::cout << "       number of threads: " << number_of_threads << std::endl;
 
 		uint64_t step = number_of_elements / number_of_threads;
 		uint64_t step_remainder = number_of_elements % number_of_threads;
@@ -55,14 +53,12 @@ void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases) {
 		}
 
 		auto end_time = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+		std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
 #ifdef PRINT_PARTIAL_SUMS
 		std::cout << "partial sums are: " << std:: endl << partialSumsToString<uint64_t>(partial_sums, number_of_threads) << std::endl;
 #endif
-		std::cout << "\tSum of integers from 0 to " << number_of_elements << " is " << sum << std::endl;
-
-		std::cout << "\tExecution time was: " << duration.count() << "ms" << std::endl;
+		announceResult(number_of_threads, sum, duration);
 	}
 }
 
