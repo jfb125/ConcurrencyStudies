@@ -12,6 +12,7 @@
 #include <vector>
 #include <numeric>
 #include <utility>
+#include <cmath>
 
 #include "ConcurrencyStudies.h"
 
@@ -135,12 +136,14 @@ int main (int argc, char *argv[]) {
 	std::cout << "ConcurrencyStudies.cpp revision " << REVISION_STRING
 			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
 
+	int number_of_tests = 100;
+
 	double average_collisions = 0.0;
 	int tests_so_far = 0;
+	int average_width = 0;
 	bool print_out_queue = false;
-	int number_of_tests = 16;
 
-	for (int rep_count = 0, line_count = 0; rep_count != number_of_tests; rep_count++, line_count++) {
+	for (int test_count = 0; test_count != number_of_tests; test_count++) {
 		std::mutex producer_lock;
 		int number_of_threads = 8;
 		uint64_t repeat_per_thread = 100;
@@ -149,6 +152,10 @@ int main (int argc, char *argv[]) {
 		int queue_size = repeat_per_thread * number_of_threads + number_of_threads;
 		std::shared_ptr<Bark> 	*produced_queue = new std::shared_ptr<Bark>[queue_size];
 		std::shared_ptr<Bark> 	*retired_queue  = new std::shared_ptr<Bark>[queue_size];
+		// determine the number of digits in the average for later formatted output
+		if (average_width == 0) {
+			average_width = 1 + static_cast<int>(std::log10(static_cast<double>(queue_size)));
+		}
 		int enqueue = 0;
 		int dequeue = 0;
 		int active_thread_count = number_of_threads;
@@ -199,14 +206,14 @@ int main (int argc, char *argv[]) {
 			}
 		}
 
-		std::cout << "out of order count: " << out_of_order_count << std::endl;
+		std::cout << std::setw(average_width) << test_count << ": out of order count: " << out_of_order_count << std::endl;
 
 		tests_so_far++;
 		average_collisions = average_collisions + (static_cast<double>(out_of_order_count) - average_collisions)/tests_so_far;
 		delete[] produced_queue;
 		delete[] retired_queue;
 	}
-	std::cout << "average number of collisions: "  << std::setw(10) << std::fixed << std::setprecision(2) << average_collisions << std::endl;
+	std::cout << "average number of collisions: "  << std::setw(average_width) << std::fixed << std::setprecision(0) << average_collisions << std::endl;
 
 	//	testThreadsAndTasks();
 	std::cout << "ConcurrencyStudies.cpp exiting" << std::endl;
