@@ -30,13 +30,16 @@ class Bark {
 public:
 	int m_thread_number;
 	int m_message_number;
-	std::string *m_message;
+	std::shared_ptr<std::string> m_message;
 
-	Bark(int thread_number, int message_number, std::string *message) :
+	Bark(int thread_number, int message_number, std::shared_ptr<std::string> message) :
 		m_thread_number(thread_number),
 		m_message_number(message_number),
 		m_message(message) {}
 
+	~Bark() {
+//		std::cout << "destroying " << m_thread_number << ", " << m_message_number << std::endl;
+	}
 };
 
 std::ostream& operator<<(std::ostream& out, Bark &object) {
@@ -62,16 +65,16 @@ class ProducerThreadArgs {
 private:
 	ProducerThreadArgs() {}
 public:
-	std::string *id_msg;
-	std::string *exit_msg;
+	std::shared_ptr<std::string> id_msg;
+	std::shared_ptr<std::string> exit_msg;
 	int thread_number;
 	int repeat_count;
-	std::shared_ptr<Bark*> *produced_queue;
-	ProducerThreadArgs(std::string *_id_msg,
-					   std::string *_exit_msg,
+	std::shared_ptr<Bark> *produced_queue;
+	ProducerThreadArgs(std::shared_ptr<std::string> _id_msg,
+					   std::shared_ptr<std::string> _exit_msg,
 					   int _thread_number,
 					   int _repeat_count,
-					   std::shared_ptr<Bark*> * _produced_queue) :
+					   std::shared_ptr<Bark> *_produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   thread_number(_thread_number),
@@ -79,21 +82,23 @@ public:
 							   produced_queue(_produced_queue) {}
 };
 
-void produceBark(ProducerThreadArgs *args, int &enqueue, int &active_thread_count, std::mutex &lock) {
-	Bark* tmp;
+void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &active_thread_count, std::mutex &lock) {
+	std::shared_ptr<Bark>tmp;
 	for (int i = 0; i != args->repeat_count; i++) {
-		tmp = new Bark(args->thread_number, i, args->id_msg);
-		lock.lock();
-		args->produced_queue[enqueue] = std::make_shared<Bark*>(tmp);
-		enqueue++;
-		lock.unlock();
+		tmp = std::make_shared<Bark>(args->thread_number, i, args->id_msg);
+		{
+			std::lock_guard<std::mutex> q_lock(lock);
+			args->produced_queue[enqueue] = tmp;
+			enqueue++;
+		}
 	}
-	tmp = new Bark(args->thread_number, args->repeat_count, args->exit_msg);
-	lock.lock();
-	args->produced_queue[enqueue] = std::make_shared<Bark*>(tmp);
-	enqueue++;
-	active_thread_count--;
-	lock.unlock();
+	tmp = std::make_shared<Bark>(args->thread_number, args->repeat_count, args->exit_msg);
+	{
+		std::lock_guard<std::mutex> q_lock(lock);
+		args->produced_queue[enqueue] = tmp;
+		enqueue++;
+		active_thread_count--;
+	}
 }
 
 /* **************************************************************************** */
@@ -102,18 +107,18 @@ void produceBark(ProducerThreadArgs *args, int &enqueue, int &active_thread_coun
 /* **************************************************************************** */
 /* **************************************************************************** */
 
-void consumeBark(int &consumed_bark_count, std::shared_ptr<Bark*> *produced_q, std::shared_ptr<Bark*> *retired_q, int &nq, int &tcnt) {
+void consumeBark(int &consumed_bark_count, std::shared_ptr<Bark> *produced_q, std::shared_ptr<Bark> *retired_q, int &nq, int &tcnt) {
 	int dq = 0;
 	while (tcnt != 0) {
 		if (dq != nq) {
 			consumed_bark_count++;
-			*retired_q[dq] = *produced_q[dq];
+			retired_q[dq] = produced_q[dq];
 			dq++;
 		}
 	}
 	while (dq != nq) {
 		consumed_bark_count++;
-		*retired_q[dq] = *produced_q[dq];
+		retired_q[dq] = produced_q[dq];
 		dq++;
 	}
 }
@@ -130,32 +135,26 @@ int main (int argc, char *argv[]) {
 	std::cout << "ConcurrencyStudies.cpp revision " << REVISION_STRING
 			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
 
-	std::mutex producer_lock;
-
-	int		active_thread_count;
-	int 	enqueue;
-	int 	dequeue;
-
-	int number_of_threads = 8;
-	int number_of_tests = 1;
-	uint64_t repeat_per_thread = 100;
-
-	int consumed_string_count;
+	double average_collisions = 0.0;
+	int tests_so_far = 0;
+	bool print_out_queue = false;
+	int number_of_tests = 16;
 
 	for (int rep_count = 0, line_count = 0; rep_count != number_of_tests; rep_count++, line_count++) {
+		std::mutex producer_lock;
+		int number_of_threads = 8;
+		uint64_t repeat_per_thread = 100;
 		// number of times a string will be enqueued / thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
 		int queue_size = repeat_per_thread * number_of_threads + number_of_threads;
-		std::shared_ptr<Bark*> 	produced_queue[queue_size];
-		std::shared_ptr<Bark*> 	retired_queue[queue_size];
-//		produced_queue = new Bark*[queue_size];
-//		retired_queue = new Bark*[queue_size];
-		enqueue = 0;
-		dequeue = 0;
-		active_thread_count = number_of_threads;
-		consumed_string_count = 0;
-		std::string *id_msg 	= new std::string("    barks   ");
-		std::string *exit_msg 	= new std::string(" ***EXITS***");
+		std::shared_ptr<Bark> 	*produced_queue = new std::shared_ptr<Bark>[queue_size];
+		std::shared_ptr<Bark> 	*retired_queue  = new std::shared_ptr<Bark>[queue_size];
+		int enqueue = 0;
+		int dequeue = 0;
+		int active_thread_count = number_of_threads;
+		int consumed_string_count = 0;
+		std::shared_ptr<std::string> id_msg 	= std::make_shared<std::string>("    barks   ");
+		std::shared_ptr<std::string> exit_msg 	= std::make_shared<std::string>(" ***EXITS***");
 
 		std::thread consumer_thread =
 				std::thread(consumeBark,
@@ -165,13 +164,10 @@ int main (int argc, char *argv[]) {
 								std::ref(enqueue),
 								std::ref(active_thread_count));
 
-		// void produceBark(std::string *id_msg, std::string *exit_msg, int thread_number, int repeat_count, Bark **q, int &enq, int &tcnt) {
 		std::vector<std::thread> producer_threads;
-		std::vector<ProducerThreadArgs*> producers_args;
 		for (int thread_number = 0; thread_number != number_of_threads; thread_number++) {
-			ProducerThreadArgs *producer_args = new ProducerThreadArgs(id_msg, exit_msg, thread_number, repeat_per_thread, produced_queue);
-			producers_args.push_back(producer_args);
-			producer_threads.push_back(std::thread(produceBark, producer_args, std::ref(enqueue), std::ref(active_thread_count), std::ref(producer_lock)));
+			std::unique_ptr<ProducerThreadArgs> producer_args = std::make_unique<ProducerThreadArgs>(id_msg, exit_msg, thread_number, repeat_per_thread, produced_queue);
+			producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(enqueue), std::ref(active_thread_count), std::ref(producer_lock)));
 		}
 
 		for (int i = 0; i != number_of_threads; i++) {
@@ -182,26 +178,35 @@ int main (int argc, char *argv[]) {
 		if (consumer_thread.joinable())
 			consumer_thread.join();
 
-		std::cout << "enqueued strings: " << enqueue << " vs dequeued strings " << dequeue << std::endl;
-		std::cout << consumed_string_count << " strings were consumed in this order: " << std::endl;
+		if (print_out_queue) {
+			std::cout << "enqueued strings: " << enqueue << " vs dequeued strings " << dequeue << std::endl;
+			std::cout << consumed_string_count << " strings were consumed in this order: " << std::endl;
+		}
 
 		int out_of_order_count = 0;
-		std::cout << std::setw(4) << "0" << ": " << *retired_queue[0] << std::endl;
-
+		if (print_out_queue)
+			std::cout << std::setw(4) << "0" << ": " << *retired_queue[0] << std::endl;
 		for (int i = 1; i != consumed_string_count; i++) {
-			std::cout << std::setw(4) << i << ": " << *retired_queue[i];
-			if (retired_queue[i]->m_thread_number != retired_queue[i-1]->m_thread_number) {
-				std::cout << " !!!! OUT OF ORDER !!!!";
+			if (print_out_queue)
+				std::cout << std::setw(4) << i << ": " << *retired_queue[i];
+			if ((retired_queue[i])->m_thread_number != (retired_queue[i-1])->m_thread_number) {
 				out_of_order_count++;
+				if (print_out_queue)
+					std::cout << " ++++ INTERLEAVED ++++";
 			}
-			std::cout << std::endl;
+			if (print_out_queue) {
+				std::cout << std::endl;
+			}
 		}
+
 		std::cout << "out of order count: " << out_of_order_count << std::endl;
 
+		tests_so_far++;
+		average_collisions = average_collisions + (static_cast<double>(out_of_order_count) - average_collisions)/tests_so_far;
 		delete[] produced_queue;
 		delete[] retired_queue;
-		std::cout << std::endl;
 	}
+	std::cout << "average number of collisions: "  << std::setw(10) << std::fixed << std::setprecision(2) << average_collisions << std::endl;
 
 	//	testThreadsAndTasks();
 	std::cout << "ConcurrencyStudies.cpp exiting" << std::endl;
