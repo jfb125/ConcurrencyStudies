@@ -20,9 +20,6 @@
 #include <limits.h>
 
 using ConcurrentRandomNumber = uint64_t;
-using cc_rand = ConcurrentRandomNumber;
-
-cc_rand testSimpleRandomizer(cc_rand min, cc_rand max);
 
 #define SIMPLE_RANDOMIZER_DEFAULT_SEED 5489ULL
 

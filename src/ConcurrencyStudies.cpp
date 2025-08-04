@@ -36,7 +36,7 @@ public:
 	int m_thread_map_width;	// used for pretty printing
 	int m_producer_thread_number;
 	int m_message_number;
-	int m_sleep_time;
+	int m_consumer_sleep_time;
 	std::shared_ptr<std::string> m_message;
 	int m_invalid_thread_number;
 	int m_consumer_thread_number;
@@ -45,7 +45,7 @@ public:
 		m_thread_map_width(thread_map_width),
 		m_producer_thread_number(producer_thread_number),
 		m_message_number(message_number),
-		m_sleep_time(sleep_time),
+		m_consumer_sleep_time(sleep_time),
 		m_message(message) {
 			m_invalid_thread_number 	= INVALID_THREAD_NUMBER;
 			m_consumer_thread_number 	= m_invalid_thread_number;
@@ -76,7 +76,7 @@ std::ostream& operator<<(std::ostream& out, Bark &object) {
 	out << "producer thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width) << " msg# "
 		<< std::setw(message_number_width) << object.m_message_number << " consumed by thread "
 		<< threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
-		<< " after " << std::setw(3) << object.m_sleep_time << " us, "
+		<< " then sleeping for " << std::setw(3) << object.m_consumer_sleep_time << " us, "
 	    << std::setw(message_number_width) << object.m_message_number << ": \"" << *object.m_message << "\"";
 	return out;
 }
@@ -89,43 +89,51 @@ std::ostream& operator<<(std::ostream& out, Bark &object) {
 /* **************************************************************************** */
 
 class ProducerThreadArgs {
-private:
-	ProducerThreadArgs() {}
+public:
+	ProducerThreadArgs() {
+		id_msg 		= std::make_shared<std::string>(" ID  ");
+		exit_msg 	= std::make_shared<std::string>(" EXIT");
+		producer_thread_number = INVALID_THREAD_NUMBER;
+		thread_map_width = 8;
+		repeat_count = 0;
+		consumer_sleep_times = nullptr;
+		produced_queue = nullptr;
+	}
 public:
 	std::shared_ptr<std::string> id_msg;
 	std::shared_ptr<std::string> exit_msg;
-	int producer_thread_number;
+	int producer_thread_number;	// this thread's number
 	int thread_map_width;		// used for formatted output
-	int repeat_count;
-	int sleep_time;
+	int repeat_count;			// how many times to execute the loop
+	int *consumer_sleep_times;	// list of sleep times for the consumer
 	std::shared_ptr<Bark> *produced_queue;
 	ProducerThreadArgs(std::shared_ptr<std::string> _id_msg,
 					   std::shared_ptr<std::string> _exit_msg,
 					   int _thread_number,
 					   int _thread_map_width,
 					   int _repeat_count,
-					   int _sleep_time,
+					   int*_consumer_sleep_times,
 					   std::shared_ptr<Bark> *_produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   producer_thread_number(_thread_number),
 							   thread_map_width(_thread_map_width),
 							   repeat_count(_repeat_count),
-							   sleep_time(_sleep_time),
+							   consumer_sleep_times(_consumer_sleep_times),
 							   produced_queue(_produced_queue) {}
 };
 
 void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &active_thread_count, std::mutex &lock) {
 	std::shared_ptr<Bark>tmp;
 	for (int i = 0; i != args->repeat_count; i++) {
-		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->sleep_time, args->id_msg);
+		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
 		{
 			std::lock_guard<std::mutex> q_lock(lock);
 			args->produced_queue[enqueue] = tmp;
 			enqueue++;
 		}
 	}
-	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->sleep_time, args->exit_msg);
+	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
 	{
 		std::lock_guard<std::mutex> q_lock(lock);
 		args->produced_queue[enqueue] = tmp;
@@ -140,26 +148,45 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &ac
 /* **************************************************************************** */
 /* **************************************************************************** */
 
-void consumeBark(int &consumed_bark_count, int consumer_thread_number, std::shared_ptr<Bark> *produced_q, std::shared_ptr<Bark> *retired_q, int &nq, int &dq, int &active_thread_count) {
+void consumeBark(int &consumed_bark_count, int consumer_thread_number, std::shared_ptr<Bark> *produced_q, std::shared_ptr<Bark> *retired_q, int &nq, int &dq, int &active_thread_count, std::mutex &consumer_lock) {
+	int sleep_time = 0;
 	while (active_thread_count != 0) {
-		if (dq != nq) {
-			consumed_bark_count++;
-			std::shared_ptr<Bark> bark = produced_q[dq];
-			produced_q[dq] = nullptr;
-			bark->m_consumer_thread_number = consumer_thread_number;
-			std::this_thread::sleep_for(std::chrono::microseconds(bark->m_sleep_time));
-			retired_q[dq] = bark;
-			dq++;
+		{	// scope of lock_guard
+			std::lock_guard<std::mutex> q_lock(consumer_lock);
+			if (dq != nq) {
+				std::shared_ptr<Bark> bark = produced_q[dq];
+				produced_q[dq] = nullptr;
+				bark->m_consumer_thread_number = consumer_thread_number;
+				sleep_time = bark->m_consumer_sleep_time;
+				consumed_bark_count++;
+				retired_q[dq] = bark;
+				dq++;
+			}
+		}
+		if (sleep_time != 0) {
+			std::this_thread::sleep_for(std::chrono::microseconds(sleep_time));
+			sleep_time = 0;
 		}
 	}
-	while (dq != nq) {
-		consumed_bark_count++;
-		std::shared_ptr<Bark> bark = produced_q[dq];
-		produced_q[dq] = nullptr;
-		bark->m_consumer_thread_number = consumer_thread_number;
-		std::this_thread::sleep_for(std::chrono::microseconds(bark->m_sleep_time));
-		retired_q[dq] = bark;
-		dq++;
+	while (true) {
+		{	// scope of lock_guard
+			std::lock_guard<std::mutex> q_lock(consumer_lock);
+			if (dq != nq) {
+				std::shared_ptr<Bark> bark = produced_q[dq];
+				produced_q[dq] = nullptr;
+				bark->m_consumer_thread_number = consumer_thread_number;
+				sleep_time = bark->m_consumer_sleep_time;
+				consumed_bark_count++;
+				retired_q[dq] = bark;
+				dq++;
+			} else {
+				break;
+			}
+		}
+		if (sleep_time != 0) {
+			std::this_thread::sleep_for(std::chrono::microseconds(sleep_time));
+			sleep_time = 0;
+		}
 	}
 }
 
@@ -176,7 +203,6 @@ int main (int argc, char *argv[]) {
 			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
 
 	SimpleRandomizer randomizer(getChronoSeed());
-	int sleep_time = 0;
 
 	int number_of_tests = 1;
 
@@ -187,10 +213,11 @@ int main (int argc, char *argv[]) {
 
 	for (int test_count = 0; test_count != number_of_tests; test_count++) {
 		std::mutex producer_lock;
+		std::mutex consumer_lock;
 		int number_of_producer_threads = 8;
-		int number_of_consumer_threads = 1;
+		int number_of_consumer_threads = 8;
 		int thread_map_width = number_of_producer_threads;	// for formatted output
-		uint64_t repeat_per_thread = 100;
+		uint64_t repeat_per_thread = 70;
 		// number of times a string will be enqueued per thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
 		int producer_queue_size = repeat_per_thread * number_of_producer_threads + number_of_producer_threads;
@@ -212,6 +239,16 @@ int main (int argc, char *argv[]) {
 		std::shared_ptr<std::string> id_msg 	= std::make_shared<std::string>("    barks   ");
 		std::shared_ptr<std::string> exit_msg 	= std::make_shared<std::string>(" ***EXITS***");
 
+		//	create the consumer sleep times pseudo randomly, which the threads will then
+		//	  insert into the 'sleep_time' member of the bark
+		int* consumer_sleep_times[number_of_producer_threads];
+		for (int i = 0; i != number_of_producer_threads; i++) {
+			consumer_sleep_times[i] = new int[repeat_per_thread+1];
+			for (uint64_t j = 0; j != repeat_per_thread+1; j++) {
+				consumer_sleep_times[i][j] = static_cast<int>(randomizer.rand(static_cast<ConcurrentRandomNumber>(1), static_cast<ConcurrentRandomNumber>(max_sleep_time_us)));
+			}
+		}
+
 		//	launch the consumer threads first so that the producer threads will not flood the producer queue
 		for (int consumer_thread_number = 0; consumer_thread_number != number_of_consumer_threads; consumer_thread_number++) {
 			consumer_threads.push_back(std::thread(consumeBark,
@@ -221,16 +258,20 @@ int main (int argc, char *argv[]) {
 													retired_queue,
 													std::ref(enqueue),
 													std::ref(dequeue),
-													std::ref(active_producer_thread_count)));
+													std::ref(active_producer_thread_count),
+													std::ref(consumer_lock)));
 		}
 
 		for (int producer_thread_number = 0; producer_thread_number != number_of_producer_threads; producer_thread_number++) {
-			sleep_time = randomizer.rand() % max_sleep_time_us;
 			std::unique_ptr<ProducerThreadArgs> producer_args =
-					std::make_unique<ProducerThreadArgs>(id_msg, exit_msg,
-														 producer_thread_number, thread_map_width, repeat_per_thread,
-														 sleep_time,
-														 produced_queue);
+					std::make_unique<ProducerThreadArgs>(
+							id_msg, exit_msg,
+							producer_thread_number,
+							thread_map_width,
+							repeat_per_thread,
+							consumer_sleep_times[producer_thread_number],
+							produced_queue
+							);
 			producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(enqueue), std::ref(active_producer_thread_count), std::ref(producer_lock)));
 		}
 
@@ -267,12 +308,16 @@ int main (int argc, char *argv[]) {
 			}
 		}
 
-		std::cout << std::setw(average_width) << test_count << ": out of order count: " << out_of_order_count << std::endl;
+		std::cout << "test #" << std::setw(average_width) << test_count << ": out of order count: " << out_of_order_count << std::endl;
 
 		tests_so_far++;
 		average_collisions = average_collisions + (static_cast<double>(out_of_order_count) - average_collisions)/tests_so_far;
 		delete[] produced_queue;
 		delete[] retired_queue;
+		for (int i = 0; i != number_of_producer_threads; i++) {
+			delete[] consumer_sleep_times[i];
+			consumer_sleep_times[i] = nullptr;
+		}
 	}
 	std::cout << "average number of collisions: "  << std::setw(average_width) << std::fixed << std::setprecision(0) << average_collisions << std::endl;
 
