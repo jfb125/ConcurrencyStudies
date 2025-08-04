@@ -19,7 +19,10 @@
 #include <chrono>
 #include <limits.h>
 
-uint64_t testSimpleRandomizer(uint64_t min, uint64_t max);
+using ConcurrentRandomNumber = uint64_t;
+using cc_rand = ConcurrentRandomNumber;
+
+cc_rand testSimpleRandomizer(cc_rand min, cc_rand max);
 
 #define SIMPLE_RANDOMIZER_DEFAULT_SEED 5489ULL
 
@@ -32,31 +35,31 @@ uint64_t testSimpleRandomizer(uint64_t min, uint64_t max);
 
 class SimpleRandomizer {
 private:
-	uint64_t	_seed;
-	uint64_t	_recent;
-	uint64_t	mt[NN];
-	int 		mti = NN+1;
+	ConcurrentRandomNumber m_seed;
+	ConcurrentRandomNumber m_recent;
+	ConcurrentRandomNumber mt[NN];
+	int 	mti = NN+1;
 
-	uint64_t genrand64_int64(void);
-	void init_genrand64(uint64_t);
+	ConcurrentRandomNumber genrand64_int64(void);
+	void init_genrand64(ConcurrentRandomNumber);
 
 
 public:
 	//	setting the seed does not re-initialize the machine
 	//	user must call 'restart()' after setting a new seed
-	SimpleRandomizer& seed(uint64_t);	// does not reinitialize
+	SimpleRandomizer& seed(ConcurrentRandomNumber);	// does not reinitialize
 	void restart(void);
 
-	uint64_t rand(void);
+	ConcurrentRandomNumber rand(void);
 	// returns on interval [min, max) - i.e., not including max
-	uint64_t rand(uint64_t min, uint64_t max);
+	ConcurrentRandomNumber rand(ConcurrentRandomNumber min, ConcurrentRandomNumber max);
 
-	uint64_t recent(void) const;
-	uint64_t seed(void) const;
+	ConcurrentRandomNumber recent(void) const;
+	ConcurrentRandomNumber seed(void) const;
 
 	// constructors initializes the machine
 	SimpleRandomizer();
-	SimpleRandomizer(uint64_t seed);
+	SimpleRandomizer(ConcurrentRandomNumber seed);
 	virtual ~SimpleRandomizer();
 	SimpleRandomizer(const SimpleRandomizer &other);
 	SimpleRandomizer& operator=(const SimpleRandomizer &other);
@@ -117,6 +120,6 @@ public:
    email: m-mat @ math.sci.hiroshima-u.ac.jp (remove spaces)
 */
 
-uint64_t getChronoSeed();
+ConcurrentRandomNumber getChronoSeed();
 
 #endif /* SIMPLERANDOMIZER_H_ */

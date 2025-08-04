@@ -11,46 +11,46 @@
 /*					initialization interface					*/
 /* ************************************************************	*/
 
-SimpleRandomizer& SimpleRandomizer::seed(uint64_t seed) {
-	_seed = seed;
+SimpleRandomizer& SimpleRandomizer::seed(ConcurrentRandomNumber seed) {
+	m_seed = seed;
 	return *this;
 }
 
-uint64_t SimpleRandomizer::seed(void) const {
-	return _seed;
+ConcurrentRandomNumber SimpleRandomizer::seed(void) const {
+	return m_seed;
 }
 
 void SimpleRandomizer::restart(void) {
-	init_genrand64(_seed);
-	_recent = _seed;
+	init_genrand64(m_seed);
+	m_recent = m_seed;
 }
 
 /* ************************************************************	*/
 /*					getting random numbers						*/
 /* ************************************************************	*/
 
-uint64_t SimpleRandomizer::rand(void) {
+ConcurrentRandomNumber SimpleRandomizer::rand(void) {
 
-	_recent = genrand64_int64();
-	return _recent;
+	m_recent = genrand64_int64();
+	return m_recent;
 }
 
 //	returns on range [min, max), i.e. - not including max
-uint64_t SimpleRandomizer::rand(uint64_t min, uint64_t max) {
+ConcurrentRandomNumber SimpleRandomizer::rand(ConcurrentRandomNumber min, ConcurrentRandomNumber max) {
 
 	if (min >= max) {
-		_recent = 0;
+		m_recent = 0;
 	} else {
 
-	_recent = genrand64_int64();
-	_recent %= max-min;
-	_recent += min;
+	m_recent = genrand64_int64();
+	m_recent %= max-min;
+	m_recent += min;
 	}
-	return _recent;
+	return m_recent;
 }
 
-uint64_t SimpleRandomizer::recent(void) const {
-	return _recent;
+ConcurrentRandomNumber SimpleRandomizer::recent(void) const {
+	return m_recent;
 }
 
 /* ****************************************************************	*/
@@ -59,20 +59,20 @@ uint64_t SimpleRandomizer::recent(void) const {
 
 SimpleRandomizer::SimpleRandomizer() {
 
-	_seed = SIMPLE_RANDOMIZER_DEFAULT_SEED;
+	m_seed = SIMPLE_RANDOMIZER_DEFAULT_SEED;
 	for (int i = 0; i != NN; i++)
 		mt[i] = 0;
 	mti = NN+1;
-	init_genrand64(_seed);
+	init_genrand64(m_seed);
 }
 
 SimpleRandomizer::SimpleRandomizer(uint64_t seed) {
 
-	_seed = seed;
+	m_seed = seed;
 	for (int i = 0; i != NN; i++)
 		mt[i] = 0;
 	mti = NN+1;
-	init_genrand64(_seed);
+	init_genrand64(m_seed);
 }
 
 SimpleRandomizer::~SimpleRandomizer() {
@@ -82,8 +82,8 @@ SimpleRandomizer::SimpleRandomizer(const SimpleRandomizer &other) {
 
 	if (&other == this)
 		return;
-	_recent = other._recent;
-	_seed = other._seed;
+	m_recent = other.m_recent;
+	m_seed = other.m_seed;
 	for (int i = 0; i != NN; i++) {
 		mt[i] = other.mt[i];
 	}
@@ -95,8 +95,8 @@ SimpleRandomizer& SimpleRandomizer::operator=(const SimpleRandomizer &other) {
 	if (&other == this)
 		return *this;
 
-	_recent = other._recent;
-	_seed = other._seed;
+	m_recent = other.m_recent;
+	m_seed = other.m_seed;
 	for (int i = 0; i != NN; i++) {
 		mt[i] = other.mt[i];
 	}
@@ -110,7 +110,7 @@ SimpleRandomizer& SimpleRandomizer::operator=(const SimpleRandomizer &other) {
 /* ****************************************************************	*/
 
 /* initializes mt[NN] with a seed */
-void SimpleRandomizer::init_genrand64(uint64_t seed)
+void SimpleRandomizer::init_genrand64(ConcurrentRandomNumber seed)
 {
     mt[0] = seed;
     for (mti=1; mti<NN; mti++)
@@ -118,11 +118,11 @@ void SimpleRandomizer::init_genrand64(uint64_t seed)
 }
 
 /* generates a random number on [0, 2^64-1]-interval */
-uint64_t SimpleRandomizer::genrand64_int64(void)
+ConcurrentRandomNumber SimpleRandomizer::genrand64_int64(void)
 {
     int i;
-    uint64_t x;
-    static uint64_t mag01[2]={0ULL, MATRIX_A};
+    ConcurrentRandomNumber x;
+    static ConcurrentRandomNumber mag01[2]={0ULL, MATRIX_A};
 
     if (mti >= NN) { /* generate NN words at one time */
 
@@ -131,7 +131,7 @@ uint64_t SimpleRandomizer::genrand64_int64(void)
     	/*	THIS WILL NEVER HAPPEN !!! */
         if (mti == NN+1) {
         	std::cout << "genrand64_int64() ERROR: generator not initialized" << std::endl;
-            init_genrand64(_seed);
+            init_genrand64(m_seed);
         }
 
         for (i=0;i<NN-MM;i++) {
@@ -162,7 +162,7 @@ uint64_t SimpleRandomizer::genrand64_int64(void)
 /*						related functions							*/
 /*	**************************************************************	*/
 
-uint64_t getChronoSeed() {
+ConcurrentRandomNumber getChronoSeed() {
 	auto now = std::chrono::system_clock::now();
 	auto duration_since_epoch = now.time_since_epoch();
 	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration_since_epoch);

@@ -15,11 +15,14 @@
 #include <cmath>
 
 #include "ConcurrencyStudies.h"
+#include "SimpleRandomizer.h"
 
 void	testThreadsAndTasks();
 
-constexpr int message_number_width  = 4;
-constexpr int thread_number_width 	= 10;
+constexpr int message_number_width  	= 4;
+constexpr int thread_number_width 		= 10;
+constexpr unsigned max_sleep_time_us	= 100;
+
 
 /* **************************************************************************** */
 /* **************************************************************************** */
@@ -33,21 +36,23 @@ public:
 	int m_thread_map_width;	// used for pretty printing
 	int m_producer_thread_number;
 	int m_message_number;
+	int m_sleep_time;
 	std::shared_ptr<std::string> m_message;
 	int m_invalid_thread_number;
 	int m_consumer_thread_number;
 
-	Bark(int thread_map_width, int producer_thread_number, int message_number, std::shared_ptr<std::string> message) :
+	Bark(int thread_map_width, int producer_thread_number, int message_number, int sleep_time, std::shared_ptr<std::string> message) :
 		m_thread_map_width(thread_map_width),
 		m_producer_thread_number(producer_thread_number),
 		m_message_number(message_number),
+		m_sleep_time(sleep_time),
 		m_message(message) {
 			m_invalid_thread_number 	= INVALID_THREAD_NUMBER;
 			m_consumer_thread_number 	= m_invalid_thread_number;
 	}
 
 	~Bark() {
-//		std::cout << "destroying " << m_thread_number << ", " << m_message_number << std::endl;
+//		std::cout << "destroying " << m_producer_thread_number << ", " << m_message_number << std::endl;
 	}
 };
 
@@ -70,7 +75,8 @@ std::string threadNumberToString(int thread_number, int thread_map_width) {
 std::ostream& operator<<(std::ostream& out, Bark &object) {
 	out << "producer thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width) << " msg# "
 		<< std::setw(message_number_width) << object.m_message_number << " consumed by thread "
-		<< threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width) << ", "
+		<< threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
+		<< " after " << std::setw(3) << object.m_sleep_time << " us, "
 	    << std::setw(message_number_width) << object.m_message_number << ": \"" << *object.m_message << "\"";
 	return out;
 }
@@ -91,32 +97,35 @@ public:
 	int producer_thread_number;
 	int thread_map_width;		// used for formatted output
 	int repeat_count;
+	int sleep_time;
 	std::shared_ptr<Bark> *produced_queue;
 	ProducerThreadArgs(std::shared_ptr<std::string> _id_msg,
 					   std::shared_ptr<std::string> _exit_msg,
 					   int _thread_number,
 					   int _thread_map_width,
 					   int _repeat_count,
+					   int _sleep_time,
 					   std::shared_ptr<Bark> *_produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   producer_thread_number(_thread_number),
 							   thread_map_width(_thread_map_width),
 							   repeat_count(_repeat_count),
+							   sleep_time(_sleep_time),
 							   produced_queue(_produced_queue) {}
 };
 
 void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &active_thread_count, std::mutex &lock) {
 	std::shared_ptr<Bark>tmp;
 	for (int i = 0; i != args->repeat_count; i++) {
-		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->id_msg);
+		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->sleep_time, args->id_msg);
 		{
 			std::lock_guard<std::mutex> q_lock(lock);
 			args->produced_queue[enqueue] = tmp;
 			enqueue++;
 		}
 	}
-	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->exit_msg);
+	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->sleep_time, args->exit_msg);
 	{
 		std::lock_guard<std::mutex> q_lock(lock);
 		args->produced_queue[enqueue] = tmp;
@@ -135,17 +144,21 @@ void consumeBark(int &consumed_bark_count, int consumer_thread_number, std::shar
 	while (active_thread_count != 0) {
 		if (dq != nq) {
 			consumed_bark_count++;
-			retired_q[dq] = produced_q[dq];
-			retired_q[dq]->m_consumer_thread_number = consumer_thread_number;
+			std::shared_ptr<Bark> bark = produced_q[dq];
 			produced_q[dq] = nullptr;
+			bark->m_consumer_thread_number = consumer_thread_number;
+			std::this_thread::sleep_for(std::chrono::microseconds(bark->m_sleep_time));
+			retired_q[dq] = bark;
 			dq++;
 		}
 	}
 	while (dq != nq) {
 		consumed_bark_count++;
-		retired_q[dq] = produced_q[dq];
-		retired_q[dq]->m_consumer_thread_number = consumer_thread_number;
+		std::shared_ptr<Bark> bark = produced_q[dq];
 		produced_q[dq] = nullptr;
+		bark->m_consumer_thread_number = consumer_thread_number;
+		std::this_thread::sleep_for(std::chrono::microseconds(bark->m_sleep_time));
+		retired_q[dq] = bark;
 		dq++;
 	}
 }
@@ -161,6 +174,9 @@ int main (int argc, char *argv[]) {
 
 	std::cout << "ConcurrencyStudies.cpp revision " << REVISION_STRING
 			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
+
+	SimpleRandomizer randomizer(getChronoSeed());
+	int sleep_time = 0;
 
 	int number_of_tests = 1;
 
@@ -209,8 +225,12 @@ int main (int argc, char *argv[]) {
 		}
 
 		for (int producer_thread_number = 0; producer_thread_number != number_of_producer_threads; producer_thread_number++) {
+			sleep_time = randomizer.rand() % max_sleep_time_us;
 			std::unique_ptr<ProducerThreadArgs> producer_args =
-					std::make_unique<ProducerThreadArgs>(id_msg, exit_msg, producer_thread_number, thread_map_width, repeat_per_thread, produced_queue);
+					std::make_unique<ProducerThreadArgs>(id_msg, exit_msg,
+														 producer_thread_number, thread_map_width, repeat_per_thread,
+														 sleep_time,
+														 produced_queue);
 			producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(enqueue), std::ref(active_producer_thread_count), std::ref(producer_lock)));
 		}
 
