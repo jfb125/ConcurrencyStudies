@@ -17,9 +17,16 @@
 #include "ConcurrencyStudies.h"
 #include "SimpleRandomizer.h"
 
+std::string information(
+	"  This version of the program simulates multiple producer threads concurrently\n"
+	"storing messages to a queue, which is then dequeued by multiple consumer threads.\n"
+	"Each message has a variable delay time that the consumer should wait before \n"
+	"retiring a message to a 'retired' queue\n\n"
+	);
+
 void	testThreadsAndTasks();
 
-constexpr int message_number_width  	= 4;
+constexpr int message_number_width  	= 3;
 constexpr int thread_number_width 		= 10;
 constexpr unsigned max_sleep_time_us	= 100;
 
@@ -56,6 +63,12 @@ public:
 	}
 };
 
+//	prints out a single digit thread number in a field "   3    " or "0      " or "       7"
+//	which makes looking at a dump of the queues a little more intuitive:
+//	   3       " some message "
+//	0          " some other message "
+//         7   " some other other message "
+
 std::string threadNumberToString(int thread_number, int thread_map_width) {
 	std::stringstream result;
 	for (int i = 0; i != thread_map_width; i ++) {
@@ -73,11 +86,10 @@ std::string threadNumberToString(int thread_number, int thread_map_width) {
 }
 
 std::ostream& operator<<(std::ostream& out, Bark &object) {
-	out << "producer thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width) << " msg# "
-		<< std::setw(message_number_width) << object.m_message_number << " consumed by thread "
-		<< threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
-		<< " then sleeping for " << std::setw(3) << object.m_consumer_sleep_time << " us, "
-	    << std::setw(message_number_width) << object.m_message_number << ": \"" << *object.m_message << "\"";
+	out << " produced by thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width)
+		<< " consumed by thread " << threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
+		<< " took " << std::setw(3) << object.m_consumer_sleep_time << " us, "
+	    << "msg # " << std::setw(message_number_width) << object.m_message_number << " \"" << *object.m_message << "\"";
 	return out;
 }
 
@@ -123,8 +135,10 @@ public:
 							   produced_queue(_produced_queue) {}
 };
 
-void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &active_thread_count, std::mutex &lock) {
+void produceBark(std::unique_ptr<ProducerThreadArgs> args, std::atomic<int> &enqueue, std::atomic<int> &active_thread_count, std::mutex &lock) {
+
 	std::shared_ptr<Bark>tmp;
+	// generate the specified number of messages / barks
 	for (int i = 0; i != args->repeat_count; i++) {
 		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
 		{
@@ -133,6 +147,7 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &ac
 			enqueue++;
 		}
 	}
+	// generate the final message
 	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
 	{
 		std::lock_guard<std::mutex> q_lock(lock);
@@ -142,51 +157,73 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, int &enqueue, int &ac
 	}
 }
 
+
 /* **************************************************************************** */
 /* **************************************************************************** */
 /* 							consumer task										*/
 /* **************************************************************************** */
 /* **************************************************************************** */
 
-void consumeBark(int &consumed_bark_count, int consumer_thread_number, std::shared_ptr<Bark> *produced_q, std::shared_ptr<Bark> *retired_q, int &nq, int &dq, int &active_thread_count, std::mutex &consumer_lock) {
-	int sleep_time = 0;
+void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_number,
+				 // variables that deal with the producer queue
+				 std::shared_ptr<Bark> *produced_q,  std::atomic<int> &produced_enqueue, std::atomic<int> &produced_dequeue,
+				 std::atomic<int> &active_thread_count, std::mutex &consumer_dequeue_lock,
+				 // variables that deal with the consumer retired queue
+				 std::shared_ptr<Bark> *retired_q, std::atomic<int> &retired_enqueue, std::mutex &consumer_retired_lock )  {
+	std::shared_ptr<Bark> bark = nullptr;
+	// while there are still active threads potentially enqueueing new messages
 	while (active_thread_count != 0) {
-		{	// scope of lock_guard
-			std::lock_guard<std::mutex> q_lock(consumer_lock);
-			if (dq != nq) {
-				std::shared_ptr<Bark> bark = produced_q[dq];
-				produced_q[dq] = nullptr;
-				bark->m_consumer_thread_number = consumer_thread_number;
-				sleep_time = bark->m_consumer_sleep_time;
-				consumed_bark_count++;
-				retired_q[dq] = bark;
-				dq++;
+		{	// begin scope of consumer_dequeue_lock guard
+			std::lock_guard<std::mutex> q_lock(consumer_dequeue_lock);
+			//	if there is a message / bark from a producer, acquire it
+			if (produced_dequeue != produced_enqueue) {
+				bark = produced_q[produced_dequeue];
+				produced_q[produced_dequeue] = nullptr;
+				produced_dequeue++;
 			}
-		}
-		if (sleep_time != 0) {
-			std::this_thread::sleep_for(std::chrono::microseconds(sleep_time));
-			sleep_time = 0;
+		}	// end scope of consumer_dqueue_lock guard
+		if (bark) {
+			//	simulate a varied processing time
+			std::this_thread::sleep_for(std::chrono::microseconds(bark->m_consumer_sleep_time));
+			//	retired the message / bark
+			bark->m_consumer_thread_number = consumer_thread_number;
+			{	// begin scope of consumer_retire_lock guard
+				std::lock_guard<std::mutex> q_lock(consumer_retired_lock);
+				retired_q[retired_enqueue] = bark;
+				retired_enqueue++;
+				consumed_bark_count++;
+			}	// end scope of consumer_retired_lock guard
+			bark = nullptr;
 		}
 	}
+	// this only happens after active_producer_thread_count == 0
+	//	which means no further messages are going to be enqueued.
+	//	  all that happens from this point is that the remaining
+	//	    messages get processed / retired
 	while (true) {
-		{	// scope of lock_guard
-			std::lock_guard<std::mutex> q_lock(consumer_lock);
-			if (dq != nq) {
-				std::shared_ptr<Bark> bark = produced_q[dq];
-				produced_q[dq] = nullptr;
-				bark->m_consumer_thread_number = consumer_thread_number;
-				sleep_time = bark->m_consumer_sleep_time;
-				consumed_bark_count++;
-				retired_q[dq] = bark;
-				dq++;
+		{	// begin scope of consumer_dequeue_lock guard
+			std::lock_guard<std::mutex> q_lock(consumer_dequeue_lock);
+			//	if not all of the produced msgs / barks have been dequeued
+			if (produced_dequeue != produced_enqueue) {
+				bark = produced_q[produced_dequeue];
+				produced_q[produced_dequeue] = nullptr;
+				produced_dequeue++;
 			} else {
+				// all of the enqueued have been dequeued - leave
 				break;
 			}
-		}
-		if (sleep_time != 0) {
-			std::this_thread::sleep_for(std::chrono::microseconds(sleep_time));
-			sleep_time = 0;
-		}
+		}	// end scope of consumer_dequeue_lock guard
+		// simulate a varied processing time
+		std::this_thread::sleep_for(std::chrono::microseconds(bark->m_consumer_sleep_time));
+		// retire the message
+		bark->m_consumer_thread_number = consumer_thread_number;
+		{	// begin scope of consumer_retire_lock guard
+			std::lock_guard<std::mutex> q_lock(consumer_retired_lock);
+			retired_q[retired_enqueue] = bark;
+			retired_enqueue++;
+			consumed_bark_count++;
+		}	// end scope of consumer_retire_lock guard
+		bark = nullptr;
 	}
 }
 
@@ -200,11 +237,13 @@ void consumeBark(int &consumed_bark_count, int consumer_thread_number, std::shar
 int main (int argc, char *argv[]) {
 
 	std::cout << "ConcurrencyStudies.cpp revision " << REVISION_STRING
-			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl;
+			  << " built on " << __DATE__ << " at " << __TIME__ << std::endl << std::endl;
+
+	std::cout << information << std::endl;
 
 	SimpleRandomizer randomizer(getChronoSeed());
 
-	int number_of_tests = 1;
+	int number_of_tests = 8;
 
 	double average_collisions = 0.0;
 	int tests_so_far = 0;
@@ -212,12 +251,13 @@ int main (int argc, char *argv[]) {
 	bool print_out_queue = true;
 
 	for (int test_count = 0; test_count != number_of_tests; test_count++) {
-		std::mutex producer_lock;
-		std::mutex consumer_lock;
+		std::mutex producer_enqueue_lock;
+		std::mutex consumer_dequeue_lock;
+		std::mutex consumer_retired_lock;
 		int number_of_producer_threads = 8;
 		int number_of_consumer_threads = 8;
 		int thread_map_width = number_of_producer_threads;	// for formatted output
-		uint64_t repeat_per_thread = 70;
+		uint64_t repeat_per_thread = 100;
 		// number of times a string will be enqueued per thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
 		int producer_queue_size = repeat_per_thread * number_of_producer_threads + number_of_producer_threads;
@@ -228,19 +268,21 @@ int main (int argc, char *argv[]) {
 		if (average_width == 0) {
 			average_width = 1 + static_cast<int>(std::log10(static_cast<double>(producer_queue_size)));
 		}
-		int enqueue = 0;
-		int dequeue = 0;
-		int active_producer_thread_count = number_of_producer_threads;
-//		int active_consumer_thread_count = number_of_consumer_threads;
+		std::atomic<int> produced_enqueue = 0;
+		std::atomic<int> produced_dequeue = 0;
+		std::atomic<int> retired_enqueue = 0;
+		std::atomic<int> active_producer_thread_count = number_of_producer_threads;
 		std::vector<std::thread> producer_threads;
 		std::vector<std::thread> consumer_threads;
 
-		int consumed_bark_count = 0;
+		std::atomic<int> consumed_bark_count = 0;
 		std::shared_ptr<std::string> id_msg 	= std::make_shared<std::string>("    barks   ");
 		std::shared_ptr<std::string> exit_msg 	= std::make_shared<std::string>(" ***EXITS***");
 
 		//	create the consumer sleep times pseudo randomly, which the threads will then
-		//	  insert into the 'sleep_time' member of the bark
+		//	  insert into the 'sleep_time' member of the bark.  The consumer thread will
+		//	  wait for this 'sleep_time' in us before retiring a thread, simulating a
+		//	  random processing time for messages of different complexity
 		int* consumer_sleep_times[number_of_producer_threads];
 		for (int i = 0; i != number_of_producer_threads; i++) {
 			consumer_sleep_times[i] = new int[repeat_per_thread+1];
@@ -252,14 +294,10 @@ int main (int argc, char *argv[]) {
 		//	launch the consumer threads first so that the producer threads will not flood the producer queue
 		for (int consumer_thread_number = 0; consumer_thread_number != number_of_consumer_threads; consumer_thread_number++) {
 			consumer_threads.push_back(std::thread(consumeBark,
-													std::ref(consumed_bark_count),
-													consumer_thread_number,
-													produced_queue,
-													retired_queue,
-													std::ref(enqueue),
-													std::ref(dequeue),
-													std::ref(active_producer_thread_count),
-													std::ref(consumer_lock)));
+													std::ref(consumed_bark_count), consumer_thread_number,
+													produced_queue, std::ref(produced_enqueue), std::ref(produced_dequeue),
+													std::ref(active_producer_thread_count), std::ref(consumer_dequeue_lock),
+													retired_queue, std::ref(retired_enqueue), std::ref(consumer_retired_lock)));
 		}
 
 		for (int producer_thread_number = 0; producer_thread_number != number_of_producer_threads; producer_thread_number++) {
@@ -272,7 +310,7 @@ int main (int argc, char *argv[]) {
 							consumer_sleep_times[producer_thread_number],
 							produced_queue
 							);
-			producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(enqueue), std::ref(active_producer_thread_count), std::ref(producer_lock)));
+			producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(produced_enqueue), std::ref(active_producer_thread_count), std::ref(producer_enqueue_lock)));
 		}
 
 		for (std::thread &t : producer_threads) {
@@ -288,17 +326,17 @@ int main (int argc, char *argv[]) {
 		}
 
 		if (print_out_queue) {
-			std::cout << "enqueued strings: " << enqueue << " vs dequeued strings " << dequeue << std::endl;
+			std::cout << "enqueued strings: " << produced_enqueue << " vs consumer & retired strings " << retired_enqueue << std::endl;
 			std::cout << consumed_bark_count << " strings were consumed in this order: " << std::endl;
 		}
 
 		int out_of_order_count = 0;
 		if (print_out_queue)
 			std::cout << std::setw(4) << "0" << ": " << *retired_queue[0] << std::endl;
-		for (int i = 1; i != consumed_bark_count; i++) {
+		for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count; retired_dequeue++) {
 			if (print_out_queue)
-				std::cout << std::setw(4) << i << ": " << *retired_queue[i];
-			if ((retired_queue[i])->m_producer_thread_number != (retired_queue[i-1])->m_producer_thread_number) {
+				std::cout << std::setw(4) << retired_dequeue << ": " << *retired_queue[retired_dequeue];
+			if ((retired_queue[retired_dequeue])->m_producer_thread_number != (retired_queue[retired_dequeue-1])->m_producer_thread_number) {
 				out_of_order_count++;
 				if (print_out_queue)
 					std::cout << " ++++ INTERLEAVED ++++";
