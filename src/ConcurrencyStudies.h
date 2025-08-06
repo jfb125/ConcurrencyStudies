@@ -16,6 +16,8 @@
 #include <numeric>
 #include <chrono>
 
+#include "Bark.h"
+
 #define MAJOR_REVISION 3
 #define MINOR_REVISION 1
 #define BUILD_NUMBER 1
