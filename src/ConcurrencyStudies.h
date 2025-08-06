@@ -17,9 +17,9 @@
 #include <chrono>
 
 #define MAJOR_REVISION 3
-#define MINOR_REVISION 0
+#define MINOR_REVISION 1
 #define BUILD_NUMBER 1
-#define REVISION_STRING "3.00"
+#define REVISION_STRING "3.01 Build 1"
 
 //#define PRINT_PARTIAL_SUMS
 
