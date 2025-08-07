@@ -6,7 +6,6 @@
  */
 
 #include "Bark.h"
-#include <fmt/format.h>
 
 //	prints out a single digit thread number in a field "   3    " or "0      " or "       7"
 //	which makes looking at a dump of the queues a little more intuitive:

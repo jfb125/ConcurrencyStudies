@@ -13,6 +13,7 @@
 #include <numeric>
 #include <utility>
 #include <cmath>
+#include <format>
 
 #include "ConcurrencyStudies.h"
 #include "SimpleRandomizer.h"
@@ -161,6 +162,35 @@ void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_numb
 	}
 }
 
+template<>
+struct std::formatter<Bark> {
+
+	bool quoted = false;
+	template<class ParseContext>
+	constexpr auto parse(ParseContext& ctx) {
+
+		auto it = ctx.begin();
+		if (it == ctx.end()) {
+			return it;
+		}
+		while (*it != '}') {
+			if (*it == 'x') {
+				quoted = true;
+			}
+			it++;
+		}
+		return it;
+	}
+
+	template<class FmtContext>
+	auto format(Bark& bark, FmtContext& ctx) const {
+		if (quoted) {
+			return std::format_to(ctx.out(), " {} ", bark.m_consumer_sleep_time);
+		} else {
+			return std::format_to(ctx.out(), "\"{}\"", bark.m_consumer_sleep_time);
+		}
+	}
+};
 
 /* **************************************************************************** */
 /* **************************************************************************** */
@@ -175,7 +205,14 @@ int main (int argc, char *argv[]) {
 
 	std::cout << information << std::endl;
 
+	std::shared_ptr<std::string> test_message = std::make_shared<std::string>("test bark");
+	Bark test_bark(1, 2, 3, 4, test_message);
+
+	std::cout << std::format("test bark unquoted: {}", test_bark) << std::endl;
+	std::cout << std::format("test bark   quoted: {:x}", test_bark) << std::endl;
+
 	SimpleRandomizer randomizer(getChronoSeed());
+	return EXIT_SUCCESS;
 
 	int number_of_tests = 8;
 
