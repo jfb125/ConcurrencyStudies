@@ -13,13 +13,14 @@
 //	0          " some other message "
 //         7   " some other other message "
 
-std::string threadNumberToString(int thread_number, int thread_map_width) {
+std::string threadNumberToString(int thread_number, int number_of_threads, int thread_number_width) {
 	std::stringstream result;
-	for (int i = 0; i != thread_map_width; i ++) {
+
+	for (int i = 0; i != number_of_threads; i ++) {
 		if (i == thread_number) {
-			result << i;
-			while (++i < thread_map_width) {
-				result << " ";
+			result << std::setw(thread_number_width) << i;
+			while (++i < number_of_threads) {
+				result << std::setw(thread_number_width) << " ";
 			}
 			break;
 		}
@@ -31,8 +32,8 @@ std::string threadNumberToString(int thread_number, int thread_map_width) {
 
 
 std::ostream& operator<<(std::ostream& out, Bark &object) {
-	out << " produced by thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width)
-		<< " consumed by thread " << threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
+	out << " produced by thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width, 1)
+		<< " consumed by thread " << threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width, 1)
 		<< " took " << std::setw(MAXIMUM_SLEEP_TIME_WIDTH) << object.m_consumer_sleep_time << " us, "
 	    << "msg # " << std::setw(MESSAGE_NUMBER_WIDTH) << object.m_message_number << " \"" << *object.m_message << "\"";
 	return out;

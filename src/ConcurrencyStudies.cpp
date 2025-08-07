@@ -162,36 +162,6 @@ void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_numb
 	}
 }
 
-template<>
-struct std::formatter<Bark> {
-
-	bool quoted = false;
-	template<class ParseContext>
-	constexpr auto parse(ParseContext& ctx) {
-
-		auto it = ctx.begin();
-		if (it == ctx.end()) {
-			return it;
-		}
-		while (*it != '}') {
-			if (*it == 'x') {
-				quoted = true;
-			}
-			it++;
-		}
-		return it;
-	}
-
-	template<class FmtContext>
-	auto format(Bark& bark, FmtContext& ctx) const {
-		if (quoted) {
-			return std::format_to(ctx.out(), " {} ", bark.m_consumer_sleep_time);
-		} else {
-			return std::format_to(ctx.out(), "\"{}\"", bark.m_consumer_sleep_time);
-		}
-	}
-};
-
 /* **************************************************************************** */
 /* **************************************************************************** */
 /* 							 		main function								*/
@@ -205,14 +175,7 @@ int main (int argc, char *argv[]) {
 
 	std::cout << information << std::endl;
 
-	std::shared_ptr<std::string> test_message = std::make_shared<std::string>("test bark");
-	Bark test_bark(1, 2, 3, 4, test_message);
-
-	std::cout << std::format("test bark unquoted: {}", test_bark) << std::endl;
-	std::cout << std::format("test bark   quoted: {:x}", test_bark) << std::endl;
-
 	SimpleRandomizer randomizer(getChronoSeed());
-	return EXIT_SUCCESS;
 
 	int number_of_tests = 8;
 
@@ -303,10 +266,14 @@ int main (int argc, char *argv[]) {
 
 		int out_of_order_count = 0;
 		if (print_out_queue)
-			std::cout << std::setw(4) << "0" << ": " << *retired_queue[0] << std::endl;
+			std::cout << std::setw(4) << "0" << ": "
+//					  << std::format("{}", *retired_queue[0]) << std::endl;
+					  << *retired_queue[0] << std::endl;
 		for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count; retired_dequeue++) {
 			if (print_out_queue)
-				std::cout << std::setw(4) << retired_dequeue << ": " << *retired_queue[retired_dequeue];
+				std::cout << std::setw(4) << retired_dequeue << ": "
+//						  << std::format("{}", *retired_queue[retired_dequeue]);
+						  << *retired_queue[retired_dequeue];
 			if ((retired_queue[retired_dequeue])->m_producer_thread_number != (retired_queue[retired_dequeue-1])->m_producer_thread_number) {
 				out_of_order_count++;
 				if (print_out_queue)
