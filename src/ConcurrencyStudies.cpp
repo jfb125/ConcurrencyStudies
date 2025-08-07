@@ -26,8 +26,7 @@ std::string information(
 
 void	testThreadsAndTasks();
 
-onstexpr unsigned max_sleep_time_us	= 100;
-
+constexpr int max_sleep_time_us = 100;
 
 /* **************************************************************************** */
 /* **************************************************************************** */
