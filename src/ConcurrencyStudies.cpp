@@ -13,6 +13,7 @@
 #include <numeric>
 #include <utility>
 #include <cmath>
+#include <format>
 
 #include "ConcurrencyStudies.h"
 #include "SimpleRandomizer.h"
@@ -26,73 +27,7 @@ std::string information(
 
 void	testThreadsAndTasks();
 
-constexpr int message_number_width  	= 3;
-constexpr int thread_number_width 		= 10;
-constexpr unsigned max_sleep_time_us	= 100;
-
-
-/* **************************************************************************** */
-/* **************************************************************************** */
-/* 							object to be enqueued / dequeued					*/
-/* **************************************************************************** */
-/* **************************************************************************** */
-#define INVALID_THREAD_NUMBER -1
-
-class Bark {
-public:
-	int m_thread_map_width;	// used for pretty printing
-	int m_producer_thread_number;
-	int m_message_number;
-	int m_consumer_sleep_time;
-	std::shared_ptr<std::string> m_message;
-	int m_invalid_thread_number;
-	int m_consumer_thread_number;
-
-	Bark(int thread_map_width, int producer_thread_number, int message_number, int sleep_time, std::shared_ptr<std::string> message) :
-		m_thread_map_width(thread_map_width),
-		m_producer_thread_number(producer_thread_number),
-		m_message_number(message_number),
-		m_consumer_sleep_time(sleep_time),
-		m_message(message) {
-			m_invalid_thread_number 	= INVALID_THREAD_NUMBER;
-			m_consumer_thread_number 	= m_invalid_thread_number;
-	}
-
-	~Bark() {
-//		std::cout << "destroying " << m_producer_thread_number << ", " << m_message_number << std::endl;
-	}
-};
-
-//	prints out a single digit thread number in a field "   3    " or "0      " or "       7"
-//	which makes looking at a dump of the queues a little more intuitive:
-//	   3       " some message "
-//	0          " some other message "
-//         7   " some other other message "
-
-std::string threadNumberToString(int thread_number, int thread_map_width) {
-	std::stringstream result;
-	for (int i = 0; i != thread_map_width; i ++) {
-		if (i == thread_number) {
-			result << i;
-			while (++i < thread_map_width) {
-				result << " ";
-			}
-			break;
-		}
-		result << " ";
-	}
-
-	return result.str();
-}
-
-std::ostream& operator<<(std::ostream& out, Bark &object) {
-	out << " produced by thread " << threadNumberToString(object.m_producer_thread_number, object.m_thread_map_width)
-		<< " consumed by thread " << threadNumberToString(object.m_consumer_thread_number, object.m_thread_map_width)
-		<< " took " << std::setw(3) << object.m_consumer_sleep_time << " us, "
-	    << "msg # " << std::setw(message_number_width) << object.m_message_number << " \"" << *object.m_message << "\"";
-	return out;
-}
-
+constexpr int max_sleep_time_us = 100;
 
 /* **************************************************************************** */
 /* **************************************************************************** */
@@ -106,7 +41,6 @@ public:
 		id_msg 		= std::make_shared<std::string>(" ID  ");
 		exit_msg 	= std::make_shared<std::string>(" EXIT");
 		producer_thread_number = INVALID_THREAD_NUMBER;
-		thread_map_width = 8;
 		repeat_count = 0;
 		consumer_sleep_times = nullptr;
 		produced_queue = nullptr;
@@ -115,21 +49,18 @@ public:
 	std::shared_ptr<std::string> id_msg;
 	std::shared_ptr<std::string> exit_msg;
 	int producer_thread_number;	// this thread's number
-	int thread_map_width;		// used for formatted output
 	int repeat_count;			// how many times to execute the loop
 	int *consumer_sleep_times;	// list of sleep times for the consumer
 	std::shared_ptr<Bark> *produced_queue;
 	ProducerThreadArgs(std::shared_ptr<std::string> _id_msg,
 					   std::shared_ptr<std::string> _exit_msg,
 					   int _thread_number,
-					   int _thread_map_width,
 					   int _repeat_count,
 					   int*_consumer_sleep_times,
 					   std::shared_ptr<Bark> *_produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   producer_thread_number(_thread_number),
-							   thread_map_width(_thread_map_width),
 							   repeat_count(_repeat_count),
 							   consumer_sleep_times(_consumer_sleep_times),
 							   produced_queue(_produced_queue) {}
@@ -140,7 +71,7 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, std::atomic<int> &enq
 	std::shared_ptr<Bark>tmp;
 	// generate the specified number of messages / barks
 	for (int i = 0; i != args->repeat_count; i++) {
-		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
+		tmp = std::make_shared<Bark>(args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
 		{
 			std::lock_guard<std::mutex> q_lock(lock);
 			args->produced_queue[enqueue] = tmp;
@@ -148,7 +79,7 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, std::atomic<int> &enq
 		}
 	}
 	// generate the final message
-	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
+	tmp = std::make_shared<Bark>(args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
 	{
 		std::lock_guard<std::mutex> q_lock(lock);
 		args->produced_queue[enqueue] = tmp;
@@ -227,7 +158,6 @@ void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_numb
 	}
 }
 
-
 /* **************************************************************************** */
 /* **************************************************************************** */
 /* 							 		main function								*/
@@ -256,7 +186,10 @@ int main (int argc, char *argv[]) {
 		std::mutex consumer_retired_lock;
 		int number_of_producer_threads = 8;
 		int number_of_consumer_threads = 8;
-		int thread_map_width = number_of_producer_threads;	// for formatted output
+//		int thread_map_width = number_of_producer_threads;	// for formatted output
+
+		constexpr const char *bark_format_string = "{:p1.8 c1.8 s3 m4}";
+
 		uint64_t repeat_per_thread = 100;
 		// number of times a string will be enqueued per thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
@@ -285,6 +218,8 @@ int main (int argc, char *argv[]) {
 		//	  random processing time for messages of different complexity
 		int* consumer_sleep_times[number_of_producer_threads];
 		for (int i = 0; i != number_of_producer_threads; i++) {
+		    // +1 because there is a final bark produced after the [0:number_of_producer_threads-1]
+		    //    that contains the message "EXITS"
 			consumer_sleep_times[i] = new int[repeat_per_thread+1];
 			for (uint64_t j = 0; j != repeat_per_thread+1; j++) {
 				consumer_sleep_times[i][j] = static_cast<int>(randomizer.rand(static_cast<ConcurrentRandomNumber>(1), static_cast<ConcurrentRandomNumber>(max_sleep_time_us)));
@@ -305,7 +240,6 @@ int main (int argc, char *argv[]) {
 					std::make_unique<ProducerThreadArgs>(
 							id_msg, exit_msg,
 							producer_thread_number,
-							thread_map_width,
 							repeat_per_thread,
 							consumer_sleep_times[producer_thread_number],
 							produced_queue
@@ -331,11 +265,16 @@ int main (int argc, char *argv[]) {
 		}
 
 		int out_of_order_count = 0;
+
 		if (print_out_queue)
-			std::cout << std::setw(4) << "0" << ": " << *retired_queue[0] << std::endl;
+			std::cout << std::setw(4) << "0" << ": "
+					  << std::format(bark_format_string, *retired_queue[0]) << std::endl;
+//					  << *retired_queue[0] << std::endl;
 		for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count; retired_dequeue++) {
 			if (print_out_queue)
-				std::cout << std::setw(4) << retired_dequeue << ": " << *retired_queue[retired_dequeue];
+				std::cout << std::setw(4) << retired_dequeue << ": "
+						  << std::format(bark_format_string, *retired_queue[retired_dequeue]);
+//						  << *retired_queue[retired_dequeue];
 			if ((retired_queue[retired_dequeue])->m_producer_thread_number != (retired_queue[retired_dequeue-1])->m_producer_thread_number) {
 				out_of_order_count++;
 				if (print_out_queue)
@@ -365,7 +304,7 @@ int main (int argc, char *argv[]) {
 }
 
 void announceResult(int number_of_threads, uint64_t sum, std::chrono::milliseconds duration) {
-	std::cout << "\t" << "number of threads: " << std::setw(3) << number_of_threads
+	std::cout << "    " << "number of threads: " << std::setw(3) << number_of_threads
 			  << " result: " << std::setw(24) << sum
 			  << " elapsed time: " << std::setw(5) << duration.count() << "ms"
 			  << std::endl;
