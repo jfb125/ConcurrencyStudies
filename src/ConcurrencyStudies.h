@@ -17,13 +17,14 @@
 #include <chrono>
 
 #include "Bark.h"
+#include "LinearProducerConsumer.h"
 
 #define MAJOR_REVISION 3
 #define MINOR_REVISION 1
 #define BUILD_NUMBER 1
 #define REVISION_STRING "3.01 Build 1"
 
-//#define PRINT_PARTIAL_SUMS
+//  pass parameters to tests that sum up partial ranges in multiple threads
 
 class TestRange {
 private:
@@ -43,6 +44,8 @@ public:
 	}
 };
 
+void mutexToLinearQueues();
+
 void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingLambda  (uint64_t number_of_elements, TestRange &test_cases);
@@ -51,16 +54,6 @@ void sumUsingAsyncFunctor	 (uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingAsyncLambda	 (uint64_t number_of_elements, TestRange &test_cases);
 
 void announceResult(int number_of_threads, uint64_t sum, std::chrono::milliseconds duration);
-
-template <typename T>
-std::string partialSumsToString(uint64_t *partial_sums, int num_sums) {
-	std::stringstream result;
-	result << "{ " << std::endl;
-	for (int i = 0; i != num_sums; i++) {
-		result << std::setw(2) << i << ": " << std::setw(24) <<  partial_sums[i] << std::endl;
-	}
-	result << "}";
-	return result.str();
-}
+std::string partialSumsToString(uint64_t *partial_sums, int num_sums);
 
 #endif	/* #ifndef CONCURRENCY_STUDIES_H */
