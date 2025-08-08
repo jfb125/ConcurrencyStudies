@@ -41,7 +41,6 @@ public:
 		id_msg 		= std::make_shared<std::string>(" ID  ");
 		exit_msg 	= std::make_shared<std::string>(" EXIT");
 		producer_thread_number = INVALID_THREAD_NUMBER;
-		thread_map_width = 8;
 		repeat_count = 0;
 		consumer_sleep_times = nullptr;
 		produced_queue = nullptr;
@@ -50,21 +49,18 @@ public:
 	std::shared_ptr<std::string> id_msg;
 	std::shared_ptr<std::string> exit_msg;
 	int producer_thread_number;	// this thread's number
-	int thread_map_width;		// used for formatted output
 	int repeat_count;			// how many times to execute the loop
 	int *consumer_sleep_times;	// list of sleep times for the consumer
 	std::shared_ptr<Bark> *produced_queue;
 	ProducerThreadArgs(std::shared_ptr<std::string> _id_msg,
 					   std::shared_ptr<std::string> _exit_msg,
 					   int _thread_number,
-					   int _thread_map_width,
 					   int _repeat_count,
 					   int*_consumer_sleep_times,
 					   std::shared_ptr<Bark> *_produced_queue) :
 							   id_msg(_id_msg),
 							   exit_msg(_exit_msg),
 							   producer_thread_number(_thread_number),
-							   thread_map_width(_thread_map_width),
 							   repeat_count(_repeat_count),
 							   consumer_sleep_times(_consumer_sleep_times),
 							   produced_queue(_produced_queue) {}
@@ -75,7 +71,7 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, std::atomic<int> &enq
 	std::shared_ptr<Bark>tmp;
 	// generate the specified number of messages / barks
 	for (int i = 0; i != args->repeat_count; i++) {
-		tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
+		tmp = std::make_shared<Bark>(args->producer_thread_number, i, args->consumer_sleep_times[i], args->id_msg);
 		{
 			std::lock_guard<std::mutex> q_lock(lock);
 			args->produced_queue[enqueue] = tmp;
@@ -83,7 +79,7 @@ void produceBark(std::unique_ptr<ProducerThreadArgs> args, std::atomic<int> &enq
 		}
 	}
 	// generate the final message
-	tmp = std::make_shared<Bark>(args->thread_map_width, args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
+	tmp = std::make_shared<Bark>(args->producer_thread_number, args->repeat_count, args->consumer_sleep_times[args->repeat_count], args->exit_msg);
 	{
 		std::lock_guard<std::mutex> q_lock(lock);
 		args->produced_queue[enqueue] = tmp;
@@ -190,7 +186,10 @@ int main (int argc, char *argv[]) {
 		std::mutex consumer_retired_lock;
 		int number_of_producer_threads = 8;
 		int number_of_consumer_threads = 8;
-		int thread_map_width = number_of_producer_threads;	// for formatted output
+//		int thread_map_width = number_of_producer_threads;	// for formatted output
+
+		constexpr const char *bark_format_string = "{:p1.8 c1.8 s3 m4}";
+
 		uint64_t repeat_per_thread = 100;
 		// number of times a string will be enqueued per thread * number_of_threads +
 		//	one more for the "exiting thread" message from each queue
@@ -219,6 +218,8 @@ int main (int argc, char *argv[]) {
 		//	  random processing time for messages of different complexity
 		int* consumer_sleep_times[number_of_producer_threads];
 		for (int i = 0; i != number_of_producer_threads; i++) {
+		    // +1 because there is a final bark produced after the [0:number_of_producer_threads-1]
+		    //    that contains the message "EXITS"
 			consumer_sleep_times[i] = new int[repeat_per_thread+1];
 			for (uint64_t j = 0; j != repeat_per_thread+1; j++) {
 				consumer_sleep_times[i][j] = static_cast<int>(randomizer.rand(static_cast<ConcurrentRandomNumber>(1), static_cast<ConcurrentRandomNumber>(max_sleep_time_us)));
@@ -239,7 +240,6 @@ int main (int argc, char *argv[]) {
 					std::make_unique<ProducerThreadArgs>(
 							id_msg, exit_msg,
 							producer_thread_number,
-							thread_map_width,
 							repeat_per_thread,
 							consumer_sleep_times[producer_thread_number],
 							produced_queue
@@ -265,7 +265,6 @@ int main (int argc, char *argv[]) {
 		}
 
 		int out_of_order_count = 0;
-		constexpr const char *bark_format_string = "{:p1.8 c1.8 s3 m4}";
 
 		if (print_out_queue)
 			std::cout << std::setw(4) << "0" << ": "
@@ -305,7 +304,7 @@ int main (int argc, char *argv[]) {
 }
 
 void announceResult(int number_of_threads, uint64_t sum, std::chrono::milliseconds duration) {
-	std::cout << "\t" << "number of threads: " << std::setw(3) << number_of_threads
+	std::cout << "    " << "number of threads: " << std::setw(3) << number_of_threads
 			  << " result: " << std::setw(24) << sum
 			  << " elapsed time: " << std::setw(5) << duration.count() << "ms"
 			  << std::endl;

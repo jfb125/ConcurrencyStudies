@@ -14,12 +14,7 @@
 #include <format>
 #include <cctype>
 
-
-#pragma push_macro("_ctoi")
-#define _ctoi(n)	((n)-'0')
-
 #define INVALID_THREAD_NUMBER -1
-#define MAXIMUM_SLEEP_TIME	100
 
 /* **************************************************************************** */
 /* **************************************************************************** */
@@ -29,7 +24,6 @@
 
 class Bark {
 public:
-	int m_thread_map_width;	// used for pretty printing
 	int m_producer_thread_number;
 	int m_message_number;
 	int m_consumer_sleep_time;
@@ -37,8 +31,7 @@ public:
 	int m_invalid_thread_number;
 	int m_consumer_thread_number;
 
-	Bark(int thread_map_width, int producer_thread_number, int message_number, int sleep_time, std::shared_ptr<std::string> message) :
-		m_thread_map_width(thread_map_width),
+	Bark(int producer_thread_number, int message_number, int sleep_time, std::shared_ptr<std::string> message) :
 		m_producer_thread_number(producer_thread_number),
 		m_message_number(message_number),
 		m_consumer_sleep_time(sleep_time),
@@ -66,7 +59,8 @@ std::string threadNumberToString(int thread_number, int thread_number_width, int
 std::ostream& operator<<(std::ostream& out, Bark &object);
 
 /*
- * 	{ p?.? c?.? s? m? }
+ * 	{ p?.? c?.? s? m? } - the order of the parameters is not important
+ *
  * 	p?.?	producer thread map parameters
  * 	i.e. - p1:8  for  8 threads 0
  * 								 1
@@ -103,16 +97,19 @@ std::ostream& operator<<(std::ostream& out, Bark &object);
 
 //	improves readability.  cannot be made into
 //	  a function because it is a const char*
+#pragma push_macro("_ctoi")
+#define _ctoi(n)	((n)-'0')
+
+#define _parse_param_value(_value, _it)\
+do {\
+	_value = 0;\
+	while (isdigit(*_it)) {\
+		_value = _value * 10 + _ctoi(*_it++);\
+	}\
+}while(false)
+
 template<>
 struct std::formatter<Bark> {
-
-#define _parse_bark_param_value(_value, _it)\
-	do {\
-		_value = 0;\
-		while (*_it != '}' && (*_it >= '0' && *_it <= '9')) {\
-			_value = 10 * _value + (*_it-'0');\
-		}\
-	} while (false)
 
 	int producer_thread_number_width	= 0;
 	int number_of_producer_threads		= 0;
@@ -166,27 +163,27 @@ struct std::formatter<Bark> {
 				it++;
 				break;
 			case BarkParserState::GET_PRODUCER_THREAD_NUMBER_WIDTH:
-				_parse_bark_param_value(producer_thread_number_width, it);
-				if (*it != '}') {
-					it++;
-					_parse_bark_param_value(number_of_producer_threads, it);
+				_parse_param_value(producer_thread_number_width, it);
+				if (*it == '.') {
+					it++;	// move past '.'
+					_parse_param_value(number_of_producer_threads, it);
 				}
 				parser_state = BarkParserState::IDLE;
 				break;
 			case BarkParserState::GET_CONSUMER_THREAD_NUMBER_WIDTH:
-				_parse_bark_param_value(consumer_thread_number_width, it);
-				if (*it != '}') {
-					it++;
-					_parse_bark_param_value(number_of_consumer_threads, it);
+				_parse_param_value(consumer_thread_number_width, it);
+				if (*it == '.') {
+					it++;	// move past '.'
+					_parse_param_value(number_of_consumer_threads, it);
 				}
 				parser_state = BarkParserState::IDLE;
 				break;
 			case BarkParserState::GET_SLEEP_TIME_WIDTH:
-				_parse_bark_param_value(sleep_time_width, it);
+				_parse_param_value(sleep_time_width, it);
 				parser_state = BarkParserState::IDLE;
 				break;
 			case BarkParserState::GET_MESSAGE_NUMBER_WIDTH:
-				_parse_bark_param_value(message_number_width, it);
+				_parse_param_value(message_number_width, it);
 				parser_state = BarkParserState::IDLE;
 				break;
 			default:
@@ -196,6 +193,8 @@ struct std::formatter<Bark> {
 		}
 		return it;
 	}
+
+#pragma pop_macro("_ctoi")
 
 /*
 	std::ostream& operator<<(std::ostream& out, Bark &object) {
@@ -213,11 +212,13 @@ struct std::formatter<Bark> {
 		result << " produced by thread " << threadNumberToString(object.m_producer_thread_number, producer_thread_number_width, number_of_producer_threads)
 			   << " consumed by thread " << threadNumberToString(object.m_consumer_thread_number, producer_thread_number_width, number_of_producer_threads)
 			   << " took " << std::setw(sleep_time_width) << object.m_consumer_sleep_time << " us, "
-			   << "msg # " << std::setw(message_number_width) << object.m_message_number << "\"" << *object.m_message << "\"";
+			   << "msg # " << std::setw(message_number_width) << std::right << object.m_message_number << " \"" << *object.m_message << "\"";
 		return std::format_to(ctx.out(), "{}", result.str());
+//		return std::format_to(ctx.out(), "{}", toString(object, producer_thread_number_width, number_of_producer_threads,
+//															  	consumer_thread_number_width, number_of_consumer_threads,
+//																sleep_time_width, message_number_width));
 	}
 };
 
-#pragma pop_macro("_ctoi")
 
 #endif /* BARK_H_ */
