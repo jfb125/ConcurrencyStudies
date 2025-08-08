@@ -265,11 +265,7 @@ int main (int argc, char *argv[]) {
 		}
 
 		int out_of_order_count = 0;
-		std::string bark_format_string = "\"{";
-		bark_format_string += 1;
-		bark_format_string += ":";
-		bark_format_string += number_of_producer_threads;
-		bark_format_string += "}\"";
+		constexpr const char *bark_format_string = "{:p1.8 c1.8 s3 m4}";
 
 		if (print_out_queue)
 			std::cout << std::setw(4) << "0" << ": "
