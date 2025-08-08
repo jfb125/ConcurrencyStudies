@@ -265,15 +265,21 @@ int main (int argc, char *argv[]) {
 		}
 
 		int out_of_order_count = 0;
+		std::string bark_format_string = "\"{";
+		bark_format_string += 1;
+		bark_format_string += ":";
+		bark_format_string += number_of_producer_threads;
+		bark_format_string += "}\"";
+
 		if (print_out_queue)
 			std::cout << std::setw(4) << "0" << ": "
-//					  << std::format("{}", *retired_queue[0]) << std::endl;
-					  << *retired_queue[0] << std::endl;
+					  << std::format(bark_format_string, *retired_queue[0]) << std::endl;
+//					  << *retired_queue[0] << std::endl;
 		for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count; retired_dequeue++) {
 			if (print_out_queue)
 				std::cout << std::setw(4) << retired_dequeue << ": "
-//						  << std::format("{}", *retired_queue[retired_dequeue]);
-						  << *retired_queue[retired_dequeue];
+						  << std::format(bark_format_string, *retired_queue[retired_dequeue]);
+//						  << *retired_queue[retired_dequeue];
 			if ((retired_queue[retired_dequeue])->m_producer_thread_number != (retired_queue[retired_dequeue-1])->m_producer_thread_number) {
 				out_of_order_count++;
 				if (print_out_queue)

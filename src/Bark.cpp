@@ -13,9 +13,9 @@
 //	0          " some other message "
 //         7   " some other other message "
 
-std::string threadNumberToString(int thread_number, int number_of_threads, int thread_number_width) {
+std::string threadNumberToString(int thread_number, int thread_number_width, int number_of_threads) {
 	std::stringstream result;
-
+	result << "thread_number_width = " << thread_number_width << ", number_of_threads = " << number_of_threads << std::endl;
 	for (int i = 0; i != number_of_threads; i ++) {
 		if (i == thread_number) {
 			result << std::setw(thread_number_width) << i;
@@ -24,7 +24,6 @@ std::string threadNumberToString(int thread_number, int number_of_threads, int t
 			}
 			break;
 		}
-		result << " ";
 	}
 
 	return result.str();
