@@ -7,6 +7,8 @@
 
 #include "LinearProducerConsumer.h"
 
+constexpr int max_sleep_time_us = 100;
+
 void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_number,
                  // variables that deal with the producer queue
                  std::shared_ptr<Bark> *produced_q,  std::atomic<int> &produced_enqueue, std::atomic<int> &produced_dequeue,
@@ -94,15 +96,33 @@ void produceBark(std::unique_ptr<LinearProducerThreadArgs> args, std::atomic<int
 }
 
 
-void linearProducerConsumerTest() {
+void testLinearProducerConsumer() {
+
+    std::cout << std::endl
+              << "* ********************************************************* *\n"
+              << "* ********************************************************* *\n"
+              << "* * Testing concurrent access by threads to linear queues * *\n"
+              << "* ********************************************************* *\n"
+              << "* ********************************************************* *\n\n"
+              << std::endl;
+
+    std::cout <<
+	"  This version of the program simulates multiple producer threads concurrently\n"
+	"storing messages to a linear queue, which are simultaneously dequeued by\n"
+    "consumer threads.The consumer threads wait a random time, then enqueue the\n"
+    "messages into to a 'retired' queue.  The retired queue is unloaded sequentially\n"
+    "in the main thread after the concurrent consumer threads terminate.\n"
+    "The results of the tests indicate how many simultaneous attempts to access both\n"
+    "the producer queue and retired queue occurred between the consumer threads.\n"
+	<< std::endl;
+
+
     SimpleRandomizer randomizer(getChronoSeed());
-
     int number_of_tests = 8;
-
     double average_collisions = 0.0;
     int tests_so_far = 0;
     int average_width = 0;
-    bool print_out_queue = true;
+    bool print_out_queue = false;
 
     for (int test_count = 0; test_count != number_of_tests; test_count++) {
         std::mutex producer_enqueue_lock;
@@ -110,67 +130,85 @@ void linearProducerConsumerTest() {
         std::mutex consumer_retired_lock;
         int number_of_producer_threads = 8;
         int number_of_consumer_threads = 8;
-//      int thread_map_width = number_of_producer_threads;  // for formatted output
+        //      int thread_map_width = number_of_producer_threads;  // for formatted output
 
         constexpr const char *bark_format_string = "{:p1.8 c1.8 s3 m4}";
 
         uint64_t repeat_per_thread = 100;
         // number of times a string will be enqueued per thread * number_of_threads +
         //  one more for the "exiting thread" message from each queue
-        int producer_queue_size = repeat_per_thread * number_of_producer_threads + number_of_producer_threads;
+        int producer_queue_size = repeat_per_thread * number_of_producer_threads
+                + number_of_producer_threads;
         int consumer_queue_size = producer_queue_size;
-        std::shared_ptr<Bark>   *produced_queue = new std::shared_ptr<Bark>[producer_queue_size];
-        std::shared_ptr<Bark>   *retired_queue  = new std::shared_ptr<Bark>[consumer_queue_size];
+        std::shared_ptr<Bark> *produced_queue =
+                new std::shared_ptr<Bark>[producer_queue_size];
+        std::shared_ptr<Bark> *retired_queue =
+                new std::shared_ptr<Bark>[consumer_queue_size];
         // determine the number of digits in the average for later formatted output
         if (average_width == 0) {
-            average_width = 1 + static_cast<int>(std::log10(static_cast<double>(producer_queue_size)));
+            average_width = 1
+                    + static_cast<int>(std::log10(
+                            static_cast<double>(producer_queue_size)));
         }
         std::atomic<int> produced_enqueue = 0;
         std::atomic<int> produced_dequeue = 0;
         std::atomic<int> retired_enqueue = 0;
-        std::atomic<int> active_producer_thread_count = number_of_producer_threads;
+        std::atomic<int> active_producer_thread_count =
+                number_of_producer_threads;
         std::vector<std::thread> producer_threads;
         std::vector<std::thread> consumer_threads;
 
         std::atomic<int> consumed_bark_count = 0;
-        std::shared_ptr<std::string> id_msg     = std::make_shared<std::string>("    barks   ");
-        std::shared_ptr<std::string> exit_msg   = std::make_shared<std::string>(" ***EXITS***");
+        std::shared_ptr<std::string> id_msg = std::make_shared<std::string>(
+                "    barks   ");
+        std::shared_ptr<std::string> exit_msg = std::make_shared<std::string>(
+                " ***EXITS***");
 
         //  create the consumer sleep times pseudo randomly, which the threads will then
         //    insert into the 'sleep_time' member of the bark.  The consumer thread will
         //    wait for this 'sleep_time' in us before retiring a thread, simulating a
         //    random processing time for messages of different complexity
-        int* consumer_sleep_times[number_of_producer_threads];
+        int *consumer_sleep_times[number_of_producer_threads];
         for (int i = 0; i != number_of_producer_threads; i++) {
             // +1 because there is a final bark produced after the [0:number_of_producer_threads-1]
             //    that contains the message "EXITS"
-            consumer_sleep_times[i] = new int[repeat_per_thread+1];
-            for (uint64_t j = 0; j != repeat_per_thread+1; j++) {
+            consumer_sleep_times[i] = new int[repeat_per_thread + 1];
+            for (uint64_t j = 0; j != repeat_per_thread + 1; j++) {
                 consumer_sleep_times[i][j] =
-                        static_cast<int>(randomizer.rand(static_cast<ConcurrentRandomNumber>(1),
-                                                         static_cast<ConcurrentRandomNumber>(LINEAR_PRODUCER_CONSUMER_MAX_SLEEP_TIME_US)));
+                        static_cast<int>(randomizer.rand(
+                                static_cast<ConcurrentRandomNumber>(1),
+                                static_cast<ConcurrentRandomNumber>(LINEAR_PRODUCER_CONSUMER_MAX_SLEEP_TIME_US)));
             }
         }
 
         //  launch the consumer threads first so that the producer threads will not flood the producer queue
-        for (int consumer_thread_number = 0; consumer_thread_number != number_of_consumer_threads; consumer_thread_number++) {
-            consumer_threads.push_back(std::thread(consumeBark,
-                                                    std::ref(consumed_bark_count), consumer_thread_number,
-                                                    produced_queue, std::ref(produced_enqueue), std::ref(produced_dequeue),
-                                                    std::ref(active_producer_thread_count), std::ref(consumer_dequeue_lock),
-                                                    retired_queue, std::ref(retired_enqueue), std::ref(consumer_retired_lock)));
+        for (int consumer_thread_number = 0;
+                consumer_thread_number != number_of_consumer_threads;
+                consumer_thread_number++) {
+            consumer_threads.push_back(
+                    std::thread(consumeBark, std::ref(consumed_bark_count),
+                            consumer_thread_number, produced_queue,
+                            std::ref(produced_enqueue),
+                            std::ref(produced_dequeue),
+                            std::ref(active_producer_thread_count),
+                            std::ref(consumer_dequeue_lock), retired_queue,
+                            std::ref(retired_enqueue),
+                            std::ref(consumer_retired_lock)));
         }
 
-        for (int producer_thread_number = 0; producer_thread_number != number_of_producer_threads; producer_thread_number++) {
+        for (int producer_thread_number = 0;
+                producer_thread_number != number_of_producer_threads;
+                producer_thread_number++) {
             std::unique_ptr<LinearProducerThreadArgs> producer_args =
-                    std::make_unique<LinearProducerThreadArgs>(
-                            id_msg, exit_msg,
-                            producer_thread_number,
-                            repeat_per_thread,
+                    std::make_unique<LinearProducerThreadArgs>(id_msg, exit_msg,
+                            producer_thread_number, repeat_per_thread,
                             consumer_sleep_times[producer_thread_number],
-                            produced_queue
-                            );
-            producer_threads.push_back(std::thread(produceBark, std::move(producer_args), std::ref(produced_enqueue), std::ref(active_producer_thread_count), std::ref(producer_enqueue_lock)));
+                            produced_queue);
+            producer_threads.push_back(
+                    std::thread(produceBark, std::move(producer_args),
+                            std::ref(produced_enqueue),
+                            std::ref(active_producer_thread_count),
+                            std::ref(producer_enqueue_lock)));
         }
 
         for (std::thread &t : producer_threads) {
@@ -180,28 +218,35 @@ void linearProducerConsumerTest() {
         }
 
         for (std::thread &t : consumer_threads) {
-            if (t.joinable()){
+            if (t.joinable()) {
                 t.join();
             }
         }
 
         if (print_out_queue) {
-            std::cout << "enqueued strings: " << produced_enqueue << " vs consumer & retired strings " << retired_enqueue << std::endl;
-            std::cout << consumed_bark_count << " strings were consumed in this order: " << std::endl;
+            std::cout << "enqueued strings: " << produced_enqueue
+                    << " vs consumer & retired strings " << retired_enqueue
+                    << std::endl;
+            std::cout << consumed_bark_count
+                    << " strings were consumed in this order: " << std::endl;
         }
 
         int out_of_order_count = 0;
 
         if (print_out_queue)
             std::cout << std::setw(4) << "0" << ": "
-                      << std::format(bark_format_string, *retired_queue[0]) << std::endl;
-//                    << *retired_queue[0] << std::endl;
-        for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count; retired_dequeue++) {
+                    << std::format(bark_format_string, *retired_queue[0])
+                    << std::endl;
+        //                    << *retired_queue[0] << std::endl;
+        for (int retired_dequeue = 1; retired_dequeue != consumed_bark_count;
+                retired_dequeue++) {
             if (print_out_queue)
                 std::cout << std::setw(4) << retired_dequeue << ": "
-                          << std::format(bark_format_string, *retired_queue[retired_dequeue]);
-//                        << *retired_queue[retired_dequeue];
-            if ((retired_queue[retired_dequeue])->m_producer_thread_number != (retired_queue[retired_dequeue-1])->m_producer_thread_number) {
+                        << std::format(bark_format_string,
+                                *retired_queue[retired_dequeue]);
+            //                        << *retired_queue[retired_dequeue];
+            if ((retired_queue[retired_dequeue])->m_producer_thread_number
+                    != (retired_queue[retired_dequeue - 1])->m_producer_thread_number) {
                 out_of_order_count++;
                 if (print_out_queue)
                     std::cout << " ++++ INTERLEAVED ++++";
@@ -211,10 +256,13 @@ void linearProducerConsumerTest() {
             }
         }
 
-        std::cout << "test #" << std::setw(average_width) << test_count << ": out of order count: " << out_of_order_count << std::endl;
+        std::cout << "test #" << std::setw(average_width) << test_count
+                << ": out of order count: " << out_of_order_count << std::endl;
 
         tests_so_far++;
-        average_collisions = average_collisions + (static_cast<double>(out_of_order_count) - average_collisions)/tests_so_far;
+        average_collisions = average_collisions
+                + (static_cast<double>(out_of_order_count) - average_collisions)
+                        / tests_so_far;
         delete[] produced_queue;
         delete[] retired_queue;
         for (int i = 0; i != number_of_producer_threads; i++) {
@@ -222,5 +270,8 @@ void linearProducerConsumerTest() {
             consumer_sleep_times[i] = nullptr;
         }
     }
-    std::cout << "average number of collisions: "  << std::setw(average_width) << std::fixed << std::setprecision(0) << average_collisions << std::endl;
+    std::cout << "average number of collisions: " << std::setw(average_width)
+            << std::fixed << std::setprecision(0) << average_collisions
+            << std::endl;
 }
+

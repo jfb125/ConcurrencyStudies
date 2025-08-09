@@ -62,15 +62,6 @@
 
 class LinearProducerThreadArgs {
 public:
-    LinearProducerThreadArgs() {
-        id_msg      = std::make_shared<std::string>(" ID  ");
-        exit_msg    = std::make_shared<std::string>(" EXIT");
-        producer_thread_number = INVALID_THREAD_NUMBER;
-        repeat_count = 0;
-        consumer_sleep_times = nullptr;
-        produced_queue = nullptr;
-    }
-public:
     std::shared_ptr<std::string> id_msg;
     std::shared_ptr<std::string> exit_msg;
     int producer_thread_number; // this thread's number
@@ -89,6 +80,14 @@ public:
                                repeat_count(_repeat_count),
                                consumer_sleep_times(_consumer_sleep_times),
                                produced_queue(_produced_queue) {}
+    LinearProducerThreadArgs() {
+        id_msg                  = std::make_shared<std::string>(" ID  ");
+        exit_msg                = std::make_shared<std::string>(" EXIT");
+        producer_thread_number  = INVALID_THREAD_NUMBER;
+        repeat_count            = 0;
+        consumer_sleep_times    = nullptr;
+        produced_queue          = nullptr;
+    }
 };
 
 void produceBark(std::unique_ptr<LinearProducerThreadArgs> args, std::atomic<int> &enqueue, std::atomic<int> &active_thread_count, std::mutex &lock);
@@ -98,7 +97,6 @@ void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_numb
 				 std::atomic<int> &active_thread_count, std::mutex &consumer_dequeue_lock,
 				 // variables that deal with the consumer retired queue
 				 std::shared_ptr<Bark> *retired_q, std::atomic<int> &retired_enqueue, std::mutex &consumer_retired_lock );
-
-void linearProducerConsumerTest();
+void testLinearProducerConsumer();
 
 #endif /* LINEARPRODUCERCONSUMER_H_ */
