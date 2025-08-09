@@ -18,12 +18,13 @@
 #include "ConcurrencyStudies.h"
 #include "SimpleRandomizer.h"
 
-std::string information(
+constexpr const char * information =
+//std::string information(
 	"  This version of the program simulates multiple producer threads concurrently\n"
-	"storing messages to a queue, which is then dequeued by multiple consumer threads.\n"
-	"Each message has a variable delay time that the consumer should wait before \n"
-	"retiring a message to a 'retired' queue\n\n"
-	);
+	"storing messages to a linear queue, which is then dequeued by consumer threads.\n"
+    "The consumer queues wait a random time, then enqueue the messages into to a\n"
+    "'retired' queue.  The retired queue is unloaded sequentially after threads terminate\n"
+	;
 
 void	testThreadsAndTasks();
 
@@ -117,8 +118,8 @@ int main (int argc, char *argv[]) {
 
 	std::cout << information << std::endl;
 
-//	linearProducerConsumerTest();
-	testThreadsAndTasks();
+	linearProducerConsumerTest();
+//	testThreadsAndTasks();
 	std::cout << "ConcurrencyStudies.cpp exiting" << std::endl;
 	return EXIT_SUCCESS;
 }

@@ -95,6 +95,14 @@ void produceBark(std::unique_ptr<LinearProducerThreadArgs> args, std::atomic<int
 
 
 void linearProducerConsumerTest() {
+
+    std::cout << std::endl
+              << "* ******************************************************* *\n"
+              << "* ******************************************************* *\n"
+              << "* ***********     Threads using linear queues     ******* *\n"
+              << "* ******************************************************* *\n"
+              << "* ******************************************************* *\n\n";
+
     SimpleRandomizer randomizer(getChronoSeed());
 
     int number_of_tests = 8;
@@ -102,7 +110,7 @@ void linearProducerConsumerTest() {
     double average_collisions = 0.0;
     int tests_so_far = 0;
     int average_width = 0;
-    bool print_out_queue = true;
+    bool print_out_queue = false;
 
     for (int test_count = 0; test_count != number_of_tests; test_count++) {
         std::mutex producer_enqueue_lock;

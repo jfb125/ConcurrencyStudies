@@ -1,47 +1,24 @@
-ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug  8 2025 at 16:08:20
+ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug  9 2025 at 08:26:30
 
   This version of the program simulates multiple producer threads concurrently
-storing messages to a queue, which is then dequeued by multiple consumer threads.
-Each message has a variable delay time that the consumer should wait before 
-retiring a message to a 'retired' queue
+storing messages to a linear queue, which is then dequeued by consumer threads.
+The consumer queues wait a random time, then enqueue the messages into to a
+'retired' queue.  The retired queue is unloaded sequentially after threads terminate
 
 
+* ******************************************************* *
+* ******************************************************* *
+* ***********     Threads using linear queues     ******* *
+* ******************************************************* *
+* ******************************************************* *
 
-void sumUsingFunction()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2744ms
-    number of threads:  23 result:       499999999500000000 elapsed time:  1717ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   554ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   638ms
-
-void sumUsingFunctor()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2698ms
-    number of threads:  23 result:       499999999500000000 elapsed time:   565ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   449ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   441ms
-
-void sumUsingLambdas()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2309ms
-    number of threads:  23 result:       499999999500000000 elapsed time:  1500ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   744ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   729ms
-
-void sumUsingAsyncFunction()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2586ms
-    number of threads:  23 result:       499999999500000000 elapsed time:   485ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   471ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   480ms
-
-void sumUsingAsyncFunctor()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2739ms
-    number of threads:  23 result:       499999999500000000 elapsed time:   509ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   443ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   449ms
-
-void sumUsingLambdas()
-    number of threads:   1 result:       499999999500000000 elapsed time:  2142ms
-    number of threads:  23 result:       499999999500000000 elapsed time:   432ms
-    number of threads: 211 result:       499999999500000000 elapsed time:   425ms
-    number of threads: 256 result:       499999999500000000 elapsed time:   428ms
-
-
+test #  0: out of order count: 428
+test #  1: out of order count: 431
+test #  2: out of order count: 432
+test #  3: out of order count: 382
+test #  4: out of order count: 577
+test #  5: out of order count: 531
+test #  6: out of order count: 514
+test #  7: out of order count: 449
+average number of collisions: 468
 ConcurrencyStudies.cpp exiting
