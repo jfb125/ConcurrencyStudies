@@ -7,3 +7,7 @@
 
 #include "RingBuffer.h"
 
+void testRingBuffer() {
+
+    RingBuffer<int> ring_buffer(10);
+}
