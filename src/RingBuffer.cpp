@@ -5,7 +5,7 @@
  *      Author: joe
  */
 
-#include "CircularQueue.h"
+#include "RingBuffer.h"
 #if 0
 CircularQueue::CircularQueue() {
 	// TODO Auto-generated constructor stub

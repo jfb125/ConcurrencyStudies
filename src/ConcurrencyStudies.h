@@ -45,6 +45,7 @@ public:
 };
 
 void mutexToLinearQueues();
+void testThreadsAndTasks();
 
 void sumUsingFunction(uint64_t number_of_elements, TestRange &test_cases);
 void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases);

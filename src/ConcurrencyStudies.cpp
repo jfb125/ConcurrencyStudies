@@ -25,85 +25,7 @@ std::string information(
 	"retiring a message to a 'retired' queue\n\n"
 	);
 
-void	testThreadsAndTasks();
 
-constexpr int max_sleep_time_us = 100;
-
-/* **************************************************************************** */
-/* **************************************************************************** */
-/* 							producer function									*/
-/* **************************************************************************** */
-/* **************************************************************************** */
-
-/* **************************************************************************** */
-/* **************************************************************************** */
-/* 							consumer task										*/
-/* **************************************************************************** */
-/* **************************************************************************** */
-#if 0
-void consumeBark(std::atomic<int> &consumed_bark_count, int consumer_thread_number,
-				 // variables that deal with the producer queue
-				 std::shared_ptr<Bark> *produced_q,  std::atomic<int> &produced_enqueue, std::atomic<int> &produced_dequeue,
-				 std::atomic<int> &active_thread_count, std::mutex &consumer_dequeue_lock,
-				 // variables that deal with the consumer retired queue
-				 std::shared_ptr<Bark> *retired_q, std::atomic<int> &retired_enqueue, std::mutex &consumer_retired_lock )  {
-	std::shared_ptr<Bark> bark = nullptr;
-	// while there are still active threads potentially enqueueing new messages
-	while (active_thread_count != 0) {
-		{	// begin scope of consumer_dequeue_lock guard
-			std::lock_guard<std::mutex> q_lock(consumer_dequeue_lock);
-			//	if there is a message / bark from a producer, acquire it
-			if (produced_dequeue != produced_enqueue) {
-				bark = produced_q[produced_dequeue];
-				produced_q[produced_dequeue] = nullptr;
-				produced_dequeue++;
-			}
-		}	// end scope of consumer_dqueue_lock guard
-		if (bark) {
-			//	simulate a varied processing time
-			std::this_thread::sleep_for(std::chrono::microseconds(bark->m_consumer_sleep_time));
-			//	retired the message / bark
-			bark->m_consumer_thread_number = consumer_thread_number;
-			{	// begin scope of consumer_retire_lock guard
-				std::lock_guard<std::mutex> q_lock(consumer_retired_lock);
-				retired_q[retired_enqueue] = bark;
-				retired_enqueue++;
-				consumed_bark_count++;
-			}	// end scope of consumer_retired_lock guard
-			bark = nullptr;
-		}
-	}
-	// this only happens after active_producer_thread_count == 0
-	//	which means no further messages are going to be enqueued.
-	//	  all that happens from this point is that the remaining
-	//	    messages get processed / retired
-	while (true) {
-		{	// begin scope of consumer_dequeue_lock guard
-			std::lock_guard<std::mutex> q_lock(consumer_dequeue_lock);
-			//	if not all of the produced msgs / barks have been dequeued
-			if (produced_dequeue != produced_enqueue) {
-				bark = produced_q[produced_dequeue];
-				produced_q[produced_dequeue] = nullptr;
-				produced_dequeue++;
-			} else {
-				// all of the enqueued have been dequeued - leave
-				break;
-			}
-		}	// end scope of consumer_dequeue_lock guard
-		// simulate a varied processing time
-		std::this_thread::sleep_for(std::chrono::microseconds(bark->m_consumer_sleep_time));
-		// retire the message
-		bark->m_consumer_thread_number = consumer_thread_number;
-		{	// begin scope of consumer_retire_lock guard
-			std::lock_guard<std::mutex> q_lock(consumer_retired_lock);
-			retired_q[retired_enqueue] = bark;
-			retired_enqueue++;
-			consumed_bark_count++;
-		}	// end scope of consumer_retire_lock guard
-		bark = nullptr;
-	}
-}
-#endif
 /* **************************************************************************** */
 /* **************************************************************************** */
 /* 							 		main function								*/
@@ -117,8 +39,9 @@ int main (int argc, char *argv[]) {
 
 	std::cout << information << std::endl;
 
-//	linearProducerConsumerTest();
 	testThreadsAndTasks();
+	testLinearProducerConsumer();
+
 	std::cout << "ConcurrencyStudies.cpp exiting" << std::endl;
 	return EXIT_SUCCESS;
 }
