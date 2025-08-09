@@ -9,25 +9,23 @@
 
 class AccumulateFunctor {
 public:
-	uint64_t m_sum;
-	uint64_t m_start;
-	uint64_t m_end;
+	sum_t m_sum;
+	sum_t m_start;
+	sum_t m_end;
 
-	void operator() (uint64_t start, uint64_t end) {
+	void operator() (sum_t start, sum_t end) {
 		m_start = start;
 		m_end = end;
 		m_sum = 0;
-		for (uint64_t i = start; i != end; i++) {
+		for (sum_t i = start; i != end; i++) {
 			m_sum += i;
 		}
 	}
 };
 
-void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
+void sumUsingFunctor (sum_t number_of_elements, TestRange &test_cases) {
 
-	std::cout 	<< std::endl
-				<< "void sumUsingFunctor()"
-				<< std::endl;
+    printTestName("void sumUsingFunctor()");
 
 	test_cases.reset();
 	while (!test_cases.done()) {
@@ -39,8 +37,8 @@ void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
 
 		auto start_time = std::chrono::high_resolution_clock::now();
 		for (int i = 0; i != number_of_threads; i++) {
-			uint64_t start = i * step_size;
-			uint64_t end = start + step_size;
+			sum_t start = i * step_size;
+			sum_t end = start + step_size;
 			if (i == number_of_threads-1) {
 				end += step_remainder;
 			}
@@ -55,7 +53,7 @@ void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
 			}
 		}
 
-		uint64_t sum = 0;
+		sum_t sum = 0;
 		for (auto &f : functors) {
 			sum += f->m_sum;
 		}
@@ -64,12 +62,17 @@ void sumUsingFunctor (uint64_t number_of_elements, TestRange &test_cases) {
 		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
 #ifdef PRINT_PARTIAL_SUMS
-		uint64_t partial_sums[number_of_threads];
+		sum_t partial_sums[number_of_threads];
 		for (int i = 0; i != number_of_threads; i++) {
 			partial_sums[i] = functors[i]->m_sum;
 		}
-		std::cout << "Partial sums are: " << partialSumsToString<uint64_t>(partial_sums, number_of_threads) << std::endl;
+		std::cout << "Partial sums are: " << partialSumsToString<sum_t>(partial_sums, number_of_threads) << std::endl;
 #endif
-		announceResult(number_of_threads, sum, duration);
+		if (sum != test_cases.correct_answer()) {
+		    printSumTestFailure(sum, test_cases.correct_answer());
+		    return;
+		}
+	    announceResult(number_of_threads, sum, duration);
 	}
+	std::cout << std::endl;
 }

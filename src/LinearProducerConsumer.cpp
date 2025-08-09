@@ -96,30 +96,34 @@ void produceBark(std::unique_ptr<LinearProducerThreadArgs> args, std::atomic<int
 }
 
 
-<<<<<<< HEAD
-void linearProducerConsumerTest() {
+void testLinearProducerConsumer() {
 
     std::cout << std::endl
-              << "* ******************************************************* *\n"
-              << "* ******************************************************* *\n"
-              << "* ***********     Threads using linear queues     ******* *\n"
-              << "* ******************************************************* *\n"
-              << "* ******************************************************* *\n\n";
-=======
-void testLinearProducerConsumer() {
->>>>>>> RingQueue
+              << "* ********************************************************* *\n"
+              << "* ********************************************************* *\n"
+              << "* * Testing concurrent access by threads to linear queues * *\n"
+              << "* ********************************************************* *\n"
+              << "* ********************************************************* *\n\n"
+              << std::endl;
+
+    std::cout <<
+	"  This version of the program simulates multiple producer threads concurrently\n"
+	"storing messages to a linear queue, which are simultaneously dequeued by\n"
+    "consumer threads.The consumer threads wait a random time, then enqueue the\n"
+    "messages into to a 'retired' queue.  The retired queue is unloaded sequentially\n"
+    "in the main thread after the concurrent consumer threads terminate.\n"
+    "The results of the tests indicate how many simultaneous attempts to access both\n"
+    "the producer queue and retired queue occurred between the consumer threads.\n"
+	<< std::endl;
+
 
     SimpleRandomizer randomizer(getChronoSeed());
     int number_of_tests = 8;
     double average_collisions = 0.0;
     int tests_so_far = 0;
     int average_width = 0;
-<<<<<<< HEAD
     bool print_out_queue = false;
 
-=======
-    bool print_out_queue = true;
->>>>>>> RingQueue
     for (int test_count = 0; test_count != number_of_tests; test_count++) {
         std::mutex producer_enqueue_lock;
         std::mutex consumer_dequeue_lock;
