@@ -31,7 +31,8 @@ int main (int argc, char *argv[]) {
 
 //	testThreadsAndTasks();
 //	testLinearProducerConsumer();
-	testRingBuffer();
+//	testRingBuffer();
+	testPRSG();
 
 	std::cout << "ConcurrencyStudies.cpp exiting" << std::endl;
 	return EXIT_SUCCESS;
