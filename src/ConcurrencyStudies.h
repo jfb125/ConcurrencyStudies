@@ -19,6 +19,7 @@
 
 #include "Bark.h"
 #include "LinearProducerConsumer.h"
+#include "RingBuffer.h"
 
 #define MAJOR_REVISION 3
 #define MINOR_REVISION 1

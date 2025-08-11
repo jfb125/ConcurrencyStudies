@@ -1,46 +1,29 @@
-ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug  9 2025 at 11:48:44
+ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug 10 2025 at 21:46:34
 
-* ******************************************************************************************** *
-* ******************************************************************************************** *
-* **** Testing performance improvement by splitting summing integers into multiple threads *** *
-* ******************************************************************************************** *
-* ******************************************************************************************** *
+Default RingBufferTestObject constructor called
+Default RingBufferTestObject constructor called
+RingBufferTestObject constructor called with ID: 2
+RingBufferTestObject constructor called with ID: 1
+RingBufferTestObject constructor called with ID: 10
+RingBufferTestObject destructor called on object with ID 10
+pointer_buffer: 
+flags:  FULL_false EMPTY_false OVERRUN_false UNDERRUN_false
+error state: 0
+    0:     dq 
+    1:        
+    2:  nq     
+    3:        
 
+object_buffer:  
+flags:  FULL_false EMPTY_false OVERRUN_false UNDERRUN_false
+error state: 0
+    0:     dq 
+    1:  nq     
 
-Summing from 0 to 1,000,000,000                LATENCIES (in milliseconds)
-Number of threads                        1           2          64         128         150         200
-------------------------------
-void sumUsingFunction()               2669        3386         734         563         564         535
-void sumUsingFunctor()                2693        1451         464         430         444         436
-void sumUsingLambdas()                2308        3361         861         753         716         732
-void sumUsingAsyncFunction()          2592        1390         464         464         463         464
-void sumUsingAsyncFunctor()           2698        1446         517         495         490         493
-void sumUsingAsyncLambdas()           2121        1144         428         426         425         425
-
-
-
-* ********************************************************* *
-* ********************************************************* *
-* * Testing concurrent access by threads to linear queues * *
-* ********************************************************* *
-* ********************************************************* *
-
-
-  This version of the program simulates multiple producer threads concurrently
-storing messages to a linear queue, which are simultaneously dequeued by
-consumer threads.The consumer threads wait a random time, then enqueue the
-messages into to a 'retired' queue.  The retired queue is unloaded sequentially
-in the main thread after the concurrent consumer threads terminate.
-The results of the tests indicate how many simultaneous attempts to access both
-the producer queue and retired queue occurred between the consumer threads.
-
-test #  0: out of order count: 524
-test #  1: out of order count: 475
-test #  2: out of order count: 570
-test #  3: out of order count: 515
-test #  4: out of order count: 600
-test #  5: out of order count: 568
-test #  6: out of order count: 542
-test #  7: out of order count: 413
-average number of collisions: 526
+in testRingBuffer()
+returning from testRingBuffer()
+RingBufferTestObject destructor called on object with ID -1
+RingBufferTestObject destructor called on object with ID 10
+RingBufferTestObject destructor called on object with ID 2
+RingBufferTestObject destructor called on object with ID 1
 ConcurrencyStudies.cpp exiting
