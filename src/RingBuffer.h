@@ -16,6 +16,25 @@
 #include <cstddef>
 #include <utility>
 
+class RingBufferTestObject {
+    int m_ID;
+
+public:
+    RingBufferTestObject() : m_ID(-1) {
+        std::cout << "Default RingBufferTestObject constructor called" << std::endl;
+    }
+    RingBufferTestObject(int ID) : m_ID(ID) {
+        std::cout << "RingBufferTestObject constructor called with ID: " << m_ID << std::endl;
+    }
+    virtual ~RingBufferTestObject() {
+        std::cout << "RingBufferTestObject destructor called on object with ID " << m_ID << std::endl;
+    }
+    friend std::ostream& operator<<(std::ostream& out, const RingBufferTestObject& object) {
+       out << "ID: " << object.m_ID;
+       return out;
+    }
+};
+
 namespace RingBufferError {
     constexpr int NO_ERROR = 0;
     constexpr int OVER_WRITE = 2;
@@ -41,7 +60,7 @@ class RingBuffer {
 	std::atomic<bool> m_full;
 	std::atomic<bool> m_over_run;
 	std::atomic<bool> m_under_run;
-	std::unique_ptr<std::shared_ptr<T>[]> m_queue;
+	std::unique_ptr<T[]> m_ring;
 	bool m_initialized;
 
 	void toUninitialized() {
@@ -53,41 +72,44 @@ class RingBuffer {
 	    m_full          = false;
 	    m_over_run      = false;
 	    m_under_run     = false;
-	    if (m_queue) {
-	        m_queue.reset();
+	    if (m_ring) {
+	        m_ring.reset();
 	    }
-	    m_queue         = nullptr;
+	    m_ring          = nullptr;
 	    m_initialized   = false;
 	}
 
 public:
 
-	std::shared_ptr<T> dequeue() {
-	    std::shared_ptr<T> result = nullptr;
+	T dequeue() {
 	    if (m_initialized) {
             m_full = false;
             if (!m_empty) {
-                result = m_queue[m_dequeue];
+                size_t location = m_dequeue;
                 if(++m_dequeue == m_size)
                     m_dequeue = 0;
                 if (m_dequeue == m_enqueue) {
                     m_empty = true;
-                } else {
-                    m_under_run = true;
                 }
+                return m_ring[location];
+            } else {
+                m_under_run = true;
+                // TODO - throw UNDERRUN exception
             }
+	    } else {
+	        // TODO - throw UNINITIALIZED exception
 	    }
-	    return result;
 	}
 
-	bool enqueue(std::shared_ptr<T> p_object) {
+	bool enqueue(T p_object) {
 	    if (m_initialized) {
 	        m_empty = false;
             if (m_full) {
                 m_over_run = true;
+                //  TODO - throw OVERRUN exception
                 return false;
             }
-            m_queue[m_enqueue] = p_object;
+            m_ring[m_enqueue] = p_object;
             if (++m_enqueue == m_size)
                 m_enqueue = 0;
             if (m_enqueue == m_dequeue) {
@@ -95,7 +117,7 @@ public:
             }
             return true;
 	    } else {
-	        // TODO - throw exception
+	        // TODO - throw UNINITIALIZED exception
 	        return false;
 	    }
 	}
@@ -104,22 +126,19 @@ public:
 	bool isFull() const     { return m_full; }
 	bool isOverRun() const  { return m_over_run; }
 	bool isUnderRun() const { return m_under_run; }
-	bool isError() const {   return RingBufferError::NO_ERROR != m_error_state;  }
+	bool isError() const    { return RingBufferError::NO_ERROR != m_error_state;  }
 	int  errorState() const { return m_error_state; }
 	bool flush() {
-        if (m_size != 0) {
-            m_error_state   = RingBufferError::NO_ERROR;
+	    if (m_initialized) {
+	        m_error_state   = RingBufferError::NO_ERROR;
             m_enqueue       = 0;
             m_dequeue       = 0;
             m_empty         = true;
             m_full          = false;
             m_over_run      = false;
             m_under_run     = false;
-            m_queue         = std::make_unique<std::shared_ptr<T>>(new std::shared_ptr<T>[m_size]);
-            for (int i = 0; i != m_size; i++)
-                m_queue[i] = nullptr;
-            m_initialized   = true;
-        } else {
+	    } else {
+	        m_ring  = nullptr;
             toUninitialized();
             // TODO - throw uninitialized error
         }
@@ -131,29 +150,25 @@ public:
 	    std::stringstream result;
 	    if(m_initialized) {
             result    << "flags: "
-                      << " full: " << (m_full ? "TRUE " : "false")
-                      << " empty: " << (m_empty ? "TRUE " : "false")
-                      << " overrun: " <<  (m_over_run ? "TRUE " : "false")
-                      << " underrun: " << (m_under_run ? "TRUE " : "false")
+                      << " FULL_" << (m_full ? "TRUE " : "false")
+                      << " EMPTY_" << (m_empty ? "TRUE " : "false")
+                      << " OVERRUN_" <<  (m_over_run ? "TRUE " : "false")
+                      << " UNDERRUN_" << (m_under_run ? "TRUE " : "false")
                       << std::endl;
             result    << "error state: " << m_error_state << std::endl;
             for (size_t i = 0; i != m_size; i++) {
                 result << std::setw(5) << i << ": ";
-                if (i == enqueue) {
+                if (i == m_enqueue) {
                     result << " nq ";
                 } else {
                     result << "   ";
                 }
-                if (i == dequeue) {
+                if (i == m_dequeue) {
                     result << " dq ";
                 } else {
                     result << "    ";
                 }
-                if (m_queue[i]) {
-                    result << *(m_queue[i]) << std::endl;
-                } else {
-                    result << "<nullptr>" << std::endl;
-                }
+                result << "\n";
             }
 	    } else {
 	        std::cout << "ring buffer uninitialized flag is TRUE" << std::endl;
@@ -163,6 +178,7 @@ public:
 
 	RingBuffer() = delete;
 	RingBuffer(size_t size) {
+	    m_ring = nullptr;
         toUninitialized();
 	    if (size != 0) {
             m_error_state   = RingBufferError::NO_ERROR;
@@ -173,21 +189,19 @@ public:
             m_full          = false;
             m_over_run      = false;
             m_under_run     = false;
-            m_queue         = std::make_unique<std::shared_ptr<T>>(new std::shared_ptr<T>[m_size]);
-            for (int i = 0; i != m_size; i++)
-                m_queue[i] = nullptr;
-            m_initialized = true;
+            m_ring          = std::make_unique<T[]>(m_size);
+            m_initialized   = true;
 	    } else {
 	        // TODO - throw uninitialized error
 	    }
 	}
 
 	virtual ~RingBuffer() {
-
 	}
-
+#if 0
 	RingBuffer(const RingBuffer &other) {
 	    if (this != &other) {
+	        m_ring          = nullptr;
 	        toUninitialized();
 	        m_error_state   = other.m_error_state;
 	        m_size          = other.m_size;
@@ -197,16 +211,21 @@ public:
 	        m_full          = other.m_full;
 	        m_over_run      = other.m_over_run;
 	        m_under_run     = other.m_under_run;
-	        m_initialized = other.m_initialized;
-	        m_queue         = std::make_unique<std::shared_ptr<T>>(new std::shared_ptr<T>[m_size]);
-	        for (int i = 0; i != m_size; i++) {
-	            m_queue[i] = std::make_shared<T>(other.m_queue[i]);
+	        if (other.m_ring) {
+	            m_ring = new T[m_size];
+	            for (size_t i = 0; i != m_size; i++) {
+	                m_ring[i] = other.m_ring[i];
+	            }
+	            m_initialized   = other.m_initialized;
+	        } else {
+	            m_initialized = false;
 	        }
 	    }
 	}
 
 	RingBuffer(RingBuffer &&other) {
 	    if (this != &other) {
+	        m_ring  = nullptr;
 	        toUninitialized();
 	        m_error_state   = other.m_error_state;
 	        m_size          = other.m_size;
@@ -216,7 +235,7 @@ public:
 	        m_full          = other.m_full;
 	        m_over_run      = other.m_over_run;
 	        m_under_run     = other.m_under_run;
-	        m_queue         = std::move(other.m_queue);
+	        m_ring          = std::move(other.m_ring);
 	        other.toUninitialized();
 	    }
 	}
@@ -232,15 +251,14 @@ public:
 	        m_full          = other.m_full;
 	        m_over_run      = other.m_over_run;
 	        m_under_run     = other.m_under_run;
-	        if (m_size != 0) {
-	            m_initialized   = other.m_initialized;
-	            m_queue         = std::make_unique<std::shared_ptr<T>>(new std::shared_ptr<T>[m_size]);
-	            for (int i = 0; i != m_size; i++) {
-	                m_queue[i] = std::make_shared<T>(other.m_queue[i]);
+	        if (other.m_ring) {
+	            m_ring      = new T[m_size];
+	            for (size_t i = 0; i != m_size; i++) {
+	                m_ring[i] = other.m_ring[i];
 	            }
+	            m_initialized = other.m_initialized;
 	        } else {
-	            m_initialized   = false;
-	            m_queue         = nullptr;
+	            m_initialized = false;
 	        }
 	    }
 	    return *this;
@@ -257,19 +275,17 @@ public:
 	        m_full          = other.m_full;
 	        m_over_run      = other.m_over_run;
 	        m_under_run     = other.m_under_run;
-	        if (m_size != 0) {
-	            m_initialized   = other.m_initialized;
-	            m_queue         = std::make_unique<std::shared_ptr<T>>(new std::shared_ptr<T>[m_size]);
-	            for (int i = 0; i != m_size; i++) {
-	                m_queue[i] = std::make_shared<T>(other.m_queue[i]);
-	            }
+	        if (other.m_ring) {
+	            m_ring          = std::move(other.m_ring);
+	            m_initialized = true;
 	        } else {
-	            m_initialized   = false;
-	            m_queue         = nullptr;
+	            m_ring = nullptr;
+	            m_initialized = false;
 	        }
 	    }
 	    return *this;
 	}
+#endif
 };
 #if 0
 std::ostream& operator<<(std::ostream &out, RingBufferError error)
