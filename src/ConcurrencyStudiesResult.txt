@@ -1,29 +1,72 @@
-ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug 11 2025 at 13:56:07
+ConcurrencyStudies.cpp revision 3.01 Build 1 built on Aug 11 2025 at 15:29:53
 
-generator initialized to: seed: 0xffff polynomial: 0xb400 state: 0xffff
-0x0000 is not 2: 0
-   1: 65535 
-   2: 32767 32768 
-   3: 21845 21845 21845 
-   4: 16383 16384 16384 16384 
-   5: 13107 13107 13107 13107 13107 
-   6: 10922 10923 10923 10923 10922 10922 
-   7:  9362  9363  9362  9362  9362  9362  9362 
-   8:  8191  8192  8192  8192  8192  8192  8192  8192 
-   9:  7281  7282  7282  7282  7282  7282  7282  7281  7281 
-  10:  6553  6554  6554  6554  6554  6554  6553  6553  6553  6553 
-  11:  5957  5958  5958  5958  5958  5958  5958  5958  5958  5957  5957 
-  12:  5461  5462  5462  5462  5461  5461  5461  5461  5461  5461  5461  5461 
-  13:  5041  5042  5042  5041  5041  5041  5041  5041  5041  5041  5041  5041  5041 
-  14:  4681  4682  4681  4681  4681  4681  4681  4681  4681  4681  4681  4681  4681  4681 
-  15:  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369  4369 
-  16:  4095  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096  4096 
-  17:  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855  3855 
-  18:  3640  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3641  3640  3640 
-  19:  3449  3450  3450  3450  3450  3449  3449  3449  3449  3449  3449  3449  3449  3449  3449  3449  3449  3449  3449 
-  20:  3276  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3277  3276  3276  3276  3276 
-  21:  3120  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3121  3120  3120  3120  3120  3120 
-  22:  2978  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2979  2978  2978 
-  23:  2849  2850  2850  2850  2850  2850  2850  2850  2850  2849  2849  2849  2849  2849  2849  2849  2849  2849  2849  2849  2849  2849  2849 
-testPRSG() exiting
+* ******************************************************************************************** *
+* ******************************************************************************************** *
+* **** Testing performance improvement by splitting summing integers into multiple threads *** *
+* ******************************************************************************************** *
+* ******************************************************************************************** *
+
+
+Summing from 0 to 1,000,000,000                LATENCIES (in milliseconds)
+Number of threads                        1           2          64         128         150         200
+------------------------------
+void sumUsingFunction()               2652        3473         829         547         533         546
+void sumUsingFunctor()                2650        1438         459         433         443         441
+void sumUsingLambdas()                2276        3282         873         747         701         724
+void sumUsingAsyncFunction()          2645        1365         471         468         468         470
+void sumUsingAsyncFunctor()           2806        1420         467         439         435         432
+void sumUsingAsyncLambdas()           2223        1176         423         423         425         425
+
+
+
+* ********************************************************* *
+* ********************************************************* *
+* * Testing concurrent access by threads to linear queues * *
+* ********************************************************* *
+* ********************************************************* *
+
+
+  This version of the program simulates multiple producer threads concurrently
+storing messages to a linear queue, which are simultaneously dequeued by
+consumer threads.The consumer threads wait a random time, then enqueue the
+messages into to a 'retired' queue.  The retired queue is unloaded sequentially
+in the main thread after the concurrent consumer threads terminate.
+The results of the tests indicate how many simultaneous attempts to access both
+the producer queue and retired queue occurred between the consumer threads.
+
+test #  0: out of order count: 486
+test #  1: out of order count: 514
+test #  2: out of order count: 494
+test #  3: out of order count: 568
+test #  4: out of order count: 543
+test #  5: out of order count: 565
+test #  6: out of order count: 545
+test #  7: out of order count: 485
+average number of collisions: 525
+Default RingBufferTestObject constructor called
+Default RingBufferTestObject constructor called
+RingBufferTestObject constructor called with ID: 2
+RingBufferTestObject constructor called with ID: 1
+RingBufferTestObject constructor called with ID: 10
+RingBufferTestObject destructor called on object with ID 10
+pointer_buffer: 
+flags:  FULL_false EMPTY_false OVERRUN_false UNDERRUN_false
+error state: 0
+    0:     dq 
+    1:        
+    2:  nq     
+    3:        
+
+object_buffer:  
+flags:  FULL_false EMPTY_false OVERRUN_false UNDERRUN_false
+error state: 0
+    0:     dq 
+    1:  nq     
+
+in testRingBuffer()
+returning from testRingBuffer()
+RingBufferTestObject destructor called on object with ID -1
+RingBufferTestObject destructor called on object with ID 10
+RingBufferTestObject destructor called on object with ID 2
+RingBufferTestObject destructor called on object with ID 1
 ConcurrencyStudies.cpp exiting
